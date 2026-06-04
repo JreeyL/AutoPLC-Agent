@@ -5,9 +5,10 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E1S3 - [Phase 3] Deployment Weaviate vector DB (Docker
-> in WSL)` is complete. The local LM Studio and Weaviate infrastructure is
-> available, but the core agent pipeline has not yet been implemented.
+> **Project status:** `E1S4T1 - Build a prototype RAG pipeline connecting the
+> LLM to the Weaviate DB` is complete. The project now has a working local RAG
+> prototype over a Siemens manual, while the core PLC generation pipeline has
+> not yet been implemented.
 
 ## Table of Contents
 
@@ -64,6 +65,9 @@ The following capabilities define the planned product scope:
   the WSL default gateway and verifies an OpenAI-compatible chat completion.
 - **Local Weaviate vector database** deployed through Docker Compose with
   persistent storage and REST/gRPC access.
+- **Prototype RAG pipeline** using LlamaIndex to ingest
+  `data/siemens_manual.txt`, store HuggingFace embeddings in Weaviate, query
+  the `SiemensManual` vector index, and answer through LM Studio.
 
 ## 🧭 Workflow and Architecture
 
@@ -159,15 +163,39 @@ curl http://localhost:8080/v1/meta
 Weaviate exposes its REST API on port `8080`, its gRPC API on port `50051`,
 and stores data in the `weaviate_data` Docker volume.
 
+### Run the RAG Prototype
+
+Ingest the Siemens manual into Weaviate:
+
+```bash
+source venv/bin/activate
+# Ensure local ignored data/siemens_manual.txt exists before running ingestion.
+python src/ingest.py
+```
+
+Query the indexed manual through LM Studio:
+
+```bash
+python src/query.py "What is the default cycle time of the cyclic interrupt OB (Main [OB35])?"
+```
+
+The query script dynamically resolves the Windows host from the WSL default
+gateway, uses the currently loaded LM Studio model, retrieves source chunks
+from the `SiemensManual` Weaviate index, and prints both the answer and source
+nodes. The verified answer for the example query is `100000 μs`.
+
 ## 📦 Project Structure
 
 ```text
 AutoPLC-Agent/
 ├── .agents/          # Local agent configuration
 ├── .codex/           # Local Codex configuration
-├── data/             # Local or generated datasets and artifacts (Git-ignored)
+├── data/
+│   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
+│   ├── ingest.py     # LlamaIndex ingestion into Weaviate
+│   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
 ├── docker-compose.yml # Local Weaviate service definition
@@ -190,6 +218,8 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | WSL networking | Dynamic default gateway discovery | Implemented |
 | Vector database | Weaviate 1.24.4 | Deployed |
 | Container runtime | Docker Engine and Docker Compose v2 | In use |
+| RAG framework | LlamaIndex | Prototype implemented |
+| Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` | In use |
 | Requirements format | BDD / Gherkin syntax | Planned |
 | Intermediate representation | AST / JSON | Planned |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
@@ -243,6 +273,14 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 - [x] **E1S3T3 - Deploy Weaviate instance and verify its running status and API
   accessibility**
 
+#### E1S4: [Phase 4] Build RAG pipeline and evaluation of frameworks
+
+- [x] **E1S4T1 - Build a prototype RAG pipeline connecting the LLM to the
+  Weaviate DB**
+- [ ] **E1S4T2 - Evaluate LangChain vs. LlamaIndex for this specific AutoPLC
+  use case**
+- [ ] **E1S4T3 - Document the findings and finalize framework selection**
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
@@ -254,6 +292,7 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 | E1S3T1 | Verified Docker Engine and Docker Compose v2 in WSL |
 | E1S3T2 | Added the pinned Weaviate Docker Compose service with persistent storage |
 | E1S3T3 | Started Weaviate and verified the local metadata API |
+| E1S4T1 | Added LlamaIndex ingestion and query scripts for the Siemens manual RAG prototype |
 
 ## 📜 Branch History
 
@@ -264,3 +303,5 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
   and connectivity test.
 - **main** (`E1S3T1`, `E1S3T2`, `E1S3T3`): Docker verification, Weaviate
   Compose configuration, and local API deployment.
+- **main** (`E1S4T1`): LlamaIndex Siemens manual ingestion and query pipeline
+  over Weaviate and LM Studio.

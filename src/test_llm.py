@@ -6,7 +6,7 @@ import subprocess
 from openai import APIConnectionError, APIError, OpenAI
 
 
-PROMPT = PROMPT = "Write an IEC 61131-3 ST logic where OutputC is TRUE if InputA and InputB are TRUE. Output ONLY raw ST code. Do not use markdown block (```). No explanations, no comments, no greetings."
+PROMPT = "What is the default cycle time of the cyclic interrupt OB (Main [OB35])?"
 
 
 def get_wsl_host_ip() -> str:
