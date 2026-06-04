@@ -31,7 +31,7 @@ This document serves as a lightweight project management tracker representing a 
 
 #### E1S2: [Phase 2] Connection of the API from Windows to WSL
 * **[E1S2T1]** Configure WSL network settings to access the Windows host LM Studio API server.
-* **[E1S2T2]** Create a test script in `notebooks/` to verify API connectivity from within WSL.
+* **[E1S2T2]** Create a test script in `src/` to verify API connectivity from within WSL.
 
 #### E1S3: [Phase 3] Deployment Weaviate vector DB (Docker in WSL)
 * **[E1S3T1]** Verify Docker installation in the WSL environment.
@@ -89,3 +89,11 @@ This document serves as a lightweight project management tracker representing a 
 * **[E1S0T2] Create the initial repository documentation**
 * **[E1S0T3] Add root ignore rules**
 * **[E1S0T4] Initial Repository Scaffold**
+
+#### E1S1: [Phase 1] LM Studio deployment and models pulling
+* **[E1S1T1]** Download and install LM Studio.
+* **[E1S1T2]** Identify and pull appropriate local LLM models for testing natural language understanding.
+
+#### E1S2: [Phase 2] Connection of the API from Windows to WSL
+* **[E1S2T1] Configure WSL network settings to access the Windows host LM Studio API server**
+* **[E1S2T2] Create a test script in `src/` to verify API connectivity from within WSL**

@@ -5,9 +5,10 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E1S0 - [Step 0] Environments and GitHub Initialization`
-> is complete. The architecture and delivery roadmap are documented here, but
-> the agent pipeline has not yet been implemented.
+> **Project status:** `E1S2 - [Phase 2] Connection of the API from Windows to
+> WSL` is complete. WSL can connect to the Windows-hosted LM Studio
+> OpenAI-compatible API, but the core agent pipeline has not yet been
+> implemented.
 
 ## Table of Contents
 
@@ -60,6 +61,8 @@ The following capabilities define the planned product scope:
   and supports future linting, simulation, and human approval gates.
 - **Notebook workspace** for experimentation, prompt evaluation, and prototype
   development.
+- **Local LM Studio connectivity test** that discovers the Windows host from
+  the WSL default gateway and verifies an OpenAI-compatible chat completion.
 
 ## 🧭 Workflow and Architecture
 
@@ -94,7 +97,9 @@ make it possible to add deterministic validation around LLM-generated content.
 
 - Python 3.10 or newer
 - `pip` and Python virtual environment support
-- An LLM provider API key once model integration is implemented
+- WSL2 Ubuntu with the `ip` command available
+- LM Studio running on the Windows host with a chat-capable model loaded
+- LM Studio local server listening on port `1234` and allowing WSL connections
 
 ### Local Setup
 
@@ -105,30 +110,40 @@ cd AutoPLC-Agent
 python3 -m venv venv
 source venv/bin/activate
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
-`requirements.txt` is currently empty because application dependencies have not
-yet been selected.
+Always install dependencies inside the project virtual environment. The
+repository currently uses the official OpenAI Python SDK v1.x to communicate
+with LM Studio's OpenAI-compatible API.
 
 ### Environment Variables
 
-Store local credentials in a root `.env` file. `.env` files are ignored by
-Git; commit only a sanitized `.env.example` when configuration variables are
-introduced.
+The connectivity script supports an optional base URL override:
 
-Example future configuration:
-
-```dotenv
-LLM_PROVIDER=
-LLM_API_KEY=
-LLM_MODEL=
+```bash
+export LM_STUDIO_BASE_URL="http://172.24.32.1:1234/v1"
 ```
 
-### Running the Project
+If `LM_STUDIO_BASE_URL` is not set, the script dynamically reads the WSL
+default gateway using `ip route show default` and constructs
+`http://<gateway-ip>:1234/v1`. This avoids hard-coding an address that may
+change after a reboot.
 
-There is no application entry point yet. Add the run command here when the
-first executable agent workflow is implemented.
+Root `.env` files are ignored by Git, but the project does not currently load
+them automatically.
+
+### Verify LM Studio Connectivity
+
+Start the LM Studio local server on Windows, load a model, then run:
+
+```bash
+source venv/bin/activate
+python src/test_llm.py
+```
+
+The script lists available models, selects the first loaded model, requests a
+brief IEC 61131-3 Structured Text hello-world example, and prints the response.
 
 ## 📦 Project Structure
 
@@ -138,7 +153,8 @@ AutoPLC-Agent/
 ├── .codex/           # Local Codex configuration
 ├── data/             # Local or generated datasets and artifacts (Git-ignored)
 ├── notebooks/        # Experiments, evaluations, and prototypes
-├── src/              # Application source code
+├── src/
+│   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
 ├── JIRA_KANBAN.md    # Jira-style Epic, Story, and Task tracker
 ├── README.md         # Project overview and development record
@@ -153,15 +169,18 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 
 | Area | Technology | Status |
 | --- | --- | --- |
-| Runtime | Python 3.10+ | Planned |
-| AI integration | LLM provider API | To be selected |
+| Runtime | Python 3.10+ | In use |
+| Local LLM engine | LM Studio OpenAI-compatible API | Connected |
+| AI integration | OpenAI Python SDK v1.x | In use |
+| WSL networking | Dynamic default gateway discovery | Implemented |
 | Requirements format | BDD / Gherkin syntax | Planned |
 | Intermediate representation | AST / JSON | Planned |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
 | Interchange format | PLCopen XML | Planned |
 | Experimentation | Jupyter notebooks | Planned |
 
-No third-party runtime libraries are currently declared.
+Dependency versions, including the OpenAI SDK and its transitive dependencies,
+are pinned in `requirements.txt`.
 
 ## 🛡️ Development Principles
 
@@ -176,7 +195,7 @@ No third-party runtime libraries are currently declared.
 
 ## ✅ Task Completion Status
 
-Task titles and status are maintained in `JIRA_KANBAN.md`.
+Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 
 ### EPIC-1: Infrastructure & Environment Setup
 
@@ -187,15 +206,32 @@ Task titles and status are maintained in `JIRA_KANBAN.md`.
 - [x] **E1S0T3 - Add root ignore rules**
 - [x] **E1S0T4 - Initial Repository Scaffold**
 
+#### E1S1: [Phase 1] LM Studio deployment and models pulling
+
+- [x] **E1S1T1 - Download and install LM Studio**
+- [x] **E1S1T2 - Identify and pull appropriate local LLM models for testing
+  natural language understanding**
+
+#### E1S2: [Phase 2] Connection of the API from Windows to WSL
+
+- [x] **E1S2T1 - Configure WSL network settings to access the Windows host LM
+  Studio API server**
+- [x] **E1S2T2 - Create a test script to verify API connectivity from within
+  WSL**
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
 | --- | --- |
 | E1S0T2 | Created the initial project overview, feature, workflow, setup, structure, and technology stack documentation |
 | E1S0T3 | Added repository hygiene documentation for virtual environments, Python caches, `.env` files, and local `data/` |
+| E1S2T1 | Installed the OpenAI SDK in the project venv and established dynamic WSL-to-Windows LM Studio addressing |
+| E1S2T2 | Added and verified `src/test_llm.py` for LM Studio chat completion connectivity |
 
 ## 📜 Branch History
 
 - **main** (`E1S0T1`, `E1S0T2`, `E1S0T3`, `E1S0T4`): Environments and
   GitHub initialization, initial documentation, root ignore rules, and
   repository scaffold.
+- **main** (`E1S2T1`, `E1S2T2`): WSL-to-Windows LM Studio API configuration
+  and connectivity test.
