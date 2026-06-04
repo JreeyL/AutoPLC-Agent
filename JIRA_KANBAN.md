@@ -97,3 +97,8 @@ This document serves as a lightweight project management tracker representing a 
 #### E1S2: [Phase 2] Connection of the API from Windows to WSL
 * **[E1S2T1] Configure WSL network settings to access the Windows host LM Studio API server**
 * **[E1S2T2] Create a test script in `src/` to verify API connectivity from within WSL**
+
+#### E1S3: [Phase 3] Deployment Weaviate vector DB (Docker in WSL)
+* **[E1S3T1] Verify Docker installation in the WSL environment**
+* **[E1S3T2] Create `docker-compose.yml` for Weaviate vector database**
+* **[E1S3T3] Deploy Weaviate instance and verify its running status and API accessibility**

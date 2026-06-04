@@ -5,10 +5,9 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E1S2 - [Phase 2] Connection of the API from Windows to
-> WSL` is complete. WSL can connect to the Windows-hosted LM Studio
-> OpenAI-compatible API, but the core agent pipeline has not yet been
-> implemented.
+> **Project status:** `E1S3 - [Phase 3] Deployment Weaviate vector DB (Docker
+> in WSL)` is complete. The local LM Studio and Weaviate infrastructure is
+> available, but the core agent pipeline has not yet been implemented.
 
 ## Table of Contents
 
@@ -63,6 +62,8 @@ The following capabilities define the planned product scope:
   development.
 - **Local LM Studio connectivity test** that discovers the Windows host from
   the WSL default gateway and verifies an OpenAI-compatible chat completion.
+- **Local Weaviate vector database** deployed through Docker Compose with
+  persistent storage and REST/gRPC access.
 
 ## 🧭 Workflow and Architecture
 
@@ -98,6 +99,7 @@ make it possible to add deterministic validation around LLM-generated content.
 - Python 3.10 or newer
 - `pip` and Python virtual environment support
 - WSL2 Ubuntu with the `ip` command available
+- Docker Engine and Docker Compose v2 available in WSL
 - LM Studio running on the Windows host with a chat-capable model loaded
 - LM Studio local server listening on port `1234` and allowing WSL connections
 
@@ -145,6 +147,18 @@ python src/test_llm.py
 The script lists available models, selects the first loaded model, requests a
 brief IEC 61131-3 Structured Text hello-world example, and prints the response.
 
+### Run Weaviate
+
+Start the local Weaviate vector database and verify its metadata endpoint:
+
+```bash
+docker compose up -d
+curl http://localhost:8080/v1/meta
+```
+
+Weaviate exposes its REST API on port `8080`, its gRPC API on port `50051`,
+and stores data in the `weaviate_data` Docker volume.
+
 ## 📦 Project Structure
 
 ```text
@@ -156,6 +170,7 @@ AutoPLC-Agent/
 ├── src/
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
+├── docker-compose.yml # Local Weaviate service definition
 ├── JIRA_KANBAN.md    # Jira-style Epic, Story, and Task tracker
 ├── README.md         # Project overview and development record
 └── requirements.txt  # Python dependencies
@@ -173,6 +188,8 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Local LLM engine | LM Studio OpenAI-compatible API | Connected |
 | AI integration | OpenAI Python SDK v1.x | In use |
 | WSL networking | Dynamic default gateway discovery | Implemented |
+| Vector database | Weaviate 1.24.4 | Deployed |
+| Container runtime | Docker Engine and Docker Compose v2 | In use |
 | Requirements format | BDD / Gherkin syntax | Planned |
 | Intermediate representation | AST / JSON | Planned |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
@@ -219,6 +236,13 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 - [x] **E1S2T2 - Create a test script to verify API connectivity from within
   WSL**
 
+#### E1S3: [Phase 3] Deployment Weaviate vector DB (Docker in WSL)
+
+- [x] **E1S3T1 - Verify Docker installation in the WSL environment**
+- [x] **E1S3T2 - Create `docker-compose.yml` for Weaviate vector database**
+- [x] **E1S3T3 - Deploy Weaviate instance and verify its running status and API
+  accessibility**
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
@@ -227,6 +251,9 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 | E1S0T3 | Added repository hygiene documentation for virtual environments, Python caches, `.env` files, and local `data/` |
 | E1S2T1 | Installed the OpenAI SDK in the project venv and established dynamic WSL-to-Windows LM Studio addressing |
 | E1S2T2 | Added and verified `src/test_llm.py` for LM Studio chat completion connectivity |
+| E1S3T1 | Verified Docker Engine and Docker Compose v2 in WSL |
+| E1S3T2 | Added the pinned Weaviate Docker Compose service with persistent storage |
+| E1S3T3 | Started Weaviate and verified the local metadata API |
 
 ## 📜 Branch History
 
@@ -235,3 +262,5 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
   repository scaffold.
 - **main** (`E1S2T1`, `E1S2T2`): WSL-to-Windows LM Studio API configuration
   and connectivity test.
+- **main** (`E1S3T1`, `E1S3T2`, `E1S3T3`): Docker verification, Weaviate
+  Compose configuration, and local API deployment.
