@@ -1,0 +1,17 @@
+# Python virtual environments
+venv/
+.venv/
+
+# Python bytecode and caches
+__pycache__/
+pycache/
+*.py[cod]
+*$py.class
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Local and generated data
+data/
