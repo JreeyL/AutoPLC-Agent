@@ -5,10 +5,10 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E1S4T1 - Build a prototype RAG pipeline connecting the
-> LLM to the Weaviate DB` is complete. The project now has a working local RAG
-> prototype over a Siemens manual, while the core PLC generation pipeline has
-> not yet been implemented.
+> **Project status:** `E1S4T2 - Evaluate LangChain vs. LlamaIndex` ingestion
+> and query scripts are complete. The project now has two parallel RAG
+> prototypes over a Siemens manual (LlamaIndex and LangChain), while the core
+> PLC generation pipeline has not yet been implemented.
 
 ## Table of Contents
 
@@ -65,9 +65,12 @@ The following capabilities define the planned product scope:
   the WSL default gateway and verifies an OpenAI-compatible chat completion.
 - **Local Weaviate vector database** deployed through Docker Compose with
   persistent storage and REST/gRPC access.
-- **Prototype RAG pipeline** using LlamaIndex to ingest
+- **Prototype RAG pipeline (LlamaIndex)** using LlamaIndex to ingest
   `data/siemens_manual.txt`, store HuggingFace embeddings in Weaviate, query
   the `SiemensManual` vector index, and answer through LM Studio.
+- **Prototype RAG pipeline (LangChain)** using LangChain to ingest the same
+  manual into a separate `LangChainSiemens` Weaviate index and query it through
+  LM Studio, enabling a direct framework comparison.
 
 ## 🧭 Workflow and Architecture
 
@@ -184,6 +187,26 @@ gateway, uses the currently loaded LM Studio model, retrieves source chunks
 from the `SiemensManual` Weaviate index, and prints both the answer and source
 nodes. The verified answer for the example query is `100000 μs`.
 
+### Run the LangChain RAG Prototype
+
+Ingest the Siemens manual into a separate Weaviate index using LangChain:
+
+```bash
+source venv/bin/activate
+# Ensure local ignored data/siemens_manual.txt exists before running ingestion.
+python src/lc_ingest.py
+```
+
+Query the `LangChainSiemens` index through LM Studio:
+
+```bash
+python src/lc_query.py "What is the default cycle time of the cyclic interrupt OB (Main [OB35])?"
+```
+
+The LangChain query script uses the same dynamic gateway resolution and
+HuggingFace embeddings as the LlamaIndex variant, allowing a direct side-by-side
+comparison of both frameworks over identical data and questions.
+
 ## 📦 Project Structure
 
 ```text
@@ -194,7 +217,9 @@ AutoPLC-Agent/
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
-│   ├── ingest.py     # LlamaIndex ingestion into Weaviate
+│   ├── ingest.py     # LlamaIndex ingestion into Weaviate (SiemensManual index)
+│   ├── lc_ingest.py  # LangChain ingestion into Weaviate (LangChainSiemens index)
+│   ├── lc_query.py   # LangChain RAG query over Weaviate and LM Studio
 │   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
@@ -219,6 +244,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Vector database | Weaviate 1.24.4 | Deployed |
 | Container runtime | Docker Engine and Docker Compose v2 | In use |
 | RAG framework | LlamaIndex | Prototype implemented |
+| RAG framework | LangChain + LCEL | Prototype implemented |
 | Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` | In use |
 | Requirements format | BDD / Gherkin syntax | Planned |
 | Intermediate representation | AST / JSON | Planned |
@@ -256,29 +282,23 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 #### E1S1: [Phase 1] LM Studio deployment and models pulling
 
 - [x] **E1S1T1 - Download and install LM Studio**
-- [x] **E1S1T2 - Identify and pull appropriate local LLM models for testing
-  natural language understanding**
+- [x] **E1S1T2 - Identify and pull appropriate local LLM models for testing natural language understanding**
 
 #### E1S2: [Phase 2] Connection of the API from Windows to WSL
 
-- [x] **E1S2T1 - Configure WSL network settings to access the Windows host LM
-  Studio API server**
-- [x] **E1S2T2 - Create a test script to verify API connectivity from within
-  WSL**
+- [x] **E1S2T1 - Configure WSL network settings to access the Windows host LM Studio API server**
+- [x] **E1S2T2 - Create a test script to verify API connectivity from within WSL**
 
 #### E1S3: [Phase 3] Deployment Weaviate vector DB (Docker in WSL)
 
 - [x] **E1S3T1 - Verify Docker installation in the WSL environment**
 - [x] **E1S3T2 - Create `docker-compose.yml` for Weaviate vector database**
-- [x] **E1S3T3 - Deploy Weaviate instance and verify its running status and API
-  accessibility**
+- [x] **E1S3T3 - Deploy Weaviate instance and verify its running status and API accessibility**
 
 #### E1S4: [Phase 4] Build RAG pipeline and evaluation of frameworks
 
-- [x] **E1S4T1 - Build a prototype RAG pipeline connecting the LLM to the
-  Weaviate DB**
-- [ ] **E1S4T2 - Evaluate LangChain vs. LlamaIndex for this specific AutoPLC
-  use case**
+- [x] **E1S4T1 - Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LlamaIndex**
+- [x] **E1S4T2 - Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LangChain**
 - [ ] **E1S4T3 - Document the findings and finalize framework selection**
 
 ## 👥 Contributors
@@ -293,6 +313,7 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 | E1S3T2 | Added the pinned Weaviate Docker Compose service with persistent storage |
 | E1S3T3 | Started Weaviate and verified the local metadata API |
 | E1S4T1 | Added LlamaIndex ingestion and query scripts for the Siemens manual RAG prototype |
+| E1S4T2 | Added LangChain ingestion (`lc_ingest.py`) and query (`lc_query.py`) scripts targeting a separate `LangChainSiemens` Weaviate index for framework comparison |
 
 ## 📜 Branch History
 
@@ -305,3 +326,5 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
   Compose configuration, and local API deployment.
 - **main** (`E1S4T1`): LlamaIndex Siemens manual ingestion and query pipeline
   over Weaviate and LM Studio.
+- **main** (`E1S4T2`): LangChain ingestion and LCEL-based query pipeline over
+  Weaviate and LM Studio for LlamaIndex comparison.
