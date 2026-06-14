@@ -105,3 +105,6 @@ This document serves as a lightweight project management tracker representing a 
 
 #### E1S4: [Phase 4] Build RAG pipeline and evaluation of frameworks
 * **[E1S4T1] Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LlamaIndex**
+* **[E1S4T2] Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LangChain**
+* **[E1S4T3] Evaluate LangChain vs. LlamaIndex for this specific AutoPLC use case. Document the findings and finalize framework selection.**
+
