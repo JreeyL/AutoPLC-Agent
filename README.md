@@ -5,10 +5,12 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E1S4T2 - Evaluate LangChain vs. LlamaIndex` ingestion
-> and query scripts are complete. The project now has two parallel RAG
-> prototypes over a Siemens manual (LlamaIndex and LangChain), while the core
-> PLC generation pipeline has not yet been implemented.
+> **Project status:** `E2S1 - Natural-language requirement ingestion` is
+> complete. `src/req_parser.py` extracts equipment, control sequences, and
+> safety interlocks from free-form requirements into a validated
+> `SystemRequirement` JSON schema. Two parallel RAG prototypes over a Siemens
+> manual (LlamaIndex and LangChain) remain in place, while downstream PLC
+> generation has not yet been implemented.
 
 ## Table of Contents
 
@@ -71,6 +73,12 @@ The following capabilities define the planned product scope:
 - **Prototype RAG pipeline (LangChain)** using LangChain to ingest the same
   manual into a separate `LangChainSiemens` Weaviate index and query it through
   LM Studio, enabling a direct framework comparison.
+- **Natural-language requirement parser** (`src/req_parser.py`) that extracts
+  equipment, control sequences, and safety interlocks from a free-form `.txt`
+  requirement into a validated `SystemRequirement` Pydantic schema, using
+  LangChain `with_structured_output` against either a local LM Studio
+  (`--backend local`) or a Gemini cloud (`--backend api`) backend, writing the
+  result to a backend-tagged `data/parsed/<name>_parsed_<backend>.json` file.
 
 ## 🧭 Workflow and Architecture
 
@@ -139,8 +147,29 @@ default gateway using `ip route show default` and constructs
 `http://<gateway-ip>:1234/v1`. This avoids hard-coding an address that may
 change after a reboot.
 
-Root `.env` files are ignored by Git, but the project does not currently load
-them automatically.
+The requirement parser also accepts a `--backend {local,api}` argument,
+defaulting to `local` (LM Studio). The `api` backend is intended for demo
+scenarios where local inference is too slow:
+
+- `api` calls `gemini-2.5-flash` through Google's OpenAI-compatible endpoint
+  (`https://generativelanguage.googleapis.com/v1beta/openai/`) and requires the
+  `GEMINI_API_KEY` environment variable. The Gemini 2.5 series supports
+  `response_format` `json_schema` natively, so this backend uses the same
+  default `with_structured_output(SystemRequirement)` binding as the local
+  backend with no extra prompt engineering.
+
+The key can be exported in the shell, or placed in a project-root `.env` file
+(the convention for `req_parser.py`):
+
+```bash
+# .env
+GEMINI_API_KEY=your-api-key-here
+```
+
+`src/req_parser.py` loads `.env` automatically at startup via `python-dotenv`.
+An already-exported shell environment variable takes priority over the `.env`
+value (`override=False`). Root `.env` files are ignored by Git, so the real key
+is never committed.
 
 ### Verify LM Studio Connectivity
 
@@ -207,6 +236,30 @@ The LangChain query script uses the same dynamic gateway resolution and
 HuggingFace embeddings as the LlamaIndex variant, allowing a direct side-by-side
 comparison of both frameworks over identical data and questions.
 
+### Run the Requirement Parser
+
+Parse a natural-language requirement into a structured `SystemRequirement` JSON:
+
+```bash
+source venv/bin/activate
+python -m src.req_parser data/requirements/sample_control.txt
+```
+
+The parser writes its output to `data/parsed/` (creating the directory if
+needed) and prints extraction statistics. By default it uses the local LM Studio
+backend. To use the Gemini cloud API instead (for demos where local inference is
+too slow), set `GEMINI_API_KEY` and pass `--backend api`:
+
+```bash
+python -m src.req_parser data/requirements/sample_control.txt --backend api
+```
+
+Output filenames are tagged by backend — `<name>_parsed_local.json` for `local`
+and `<name>_parsed_api.json` for the cloud `api` backend — so local and cloud
+extractions for the same input file coexist and can be diffed to compare
+extraction quality. Rerunning the same backend overwrites only that backend's
+own file.
+
 ## 📦 Project Structure
 
 ```text
@@ -214,6 +267,8 @@ AutoPLC-Agent/
 ├── .agents/          # Local agent configuration
 ├── .codex/           # Local Codex configuration
 ├── data/
+│   ├── requirements/ # Input natural-language requirement .txt files
+│   ├── parsed/       # Structured SystemRequirement JSON output
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
@@ -221,6 +276,8 @@ AutoPLC-Agent/
 │   ├── lc_ingest.py  # LangChain ingestion into Weaviate (LangChainSiemens index)
 │   ├── lc_query.py   # LangChain RAG query over Weaviate and LM Studio
 │   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
+│   ├── req_parser.py # Natural-language requirement parser to structured JSON
+│   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
 ├── docker-compose.yml # Local Weaviate service definition
@@ -239,6 +296,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | --- | --- | --- |
 | Runtime | Python 3.10+ | In use |
 | Local LLM engine | LM Studio OpenAI-compatible API | Connected |
+| Cloud LLM engine (demo) | Gemini API (`gemini-2.5-flash`) | Optional `--backend api` |
 | AI integration | OpenAI Python SDK v1.x | In use |
 | WSL networking | Dynamic default gateway discovery | Implemented |
 | Vector database | Weaviate 1.24.4 | Deployed |
@@ -246,6 +304,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | RAG framework | LlamaIndex | Prototype implemented |
 | RAG framework | LangChain + LCEL | Prototype implemented |
 | Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` | In use |
+| Structured extraction | Pydantic + LangChain `with_structured_output` | In use |
 | Requirements format | BDD / Gherkin syntax | Planned |
 | Intermediate representation | AST / JSON | Planned |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
@@ -301,6 +360,84 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 - [x] **E1S4T2 - Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LangChain**
 - [ ] **E1S4T3 - Document the findings and finalize framework selection**
 
+### EPIC-2: Core Agent Pipeline
+
+#### E2S1: Natural-language requirement ingestion
+
+- [x] **E2S1T1 - Develop the parser and input interface for control sequences, equipment behavior, and interlocks**
+
+`src/req_parser.py` implements all six specified components (file I/O, dynamic
+WSL-to-LM Studio LLM initialization, system prompting, structured Pydantic
+binding, chain execution, and JSON output handling). It was locally verified
+against `data/requirements/sample_control.txt` (LM Studio + `gemma-4-E4B`,
+600 s timeout), successfully extracting 4 equipment items, 2 interlocks, and 5
+sequence steps, with output written to `data/parsed/sample_control_parsed.json`.
+The script also supports a `--backend {local,api}` argument (default
+`local`); the `api` backend targets `gemini-2.5-flash` via the Google cloud
+API (requires `GEMINI_API_KEY`) for demos where local inference is too slow.
+
+##### Core Extraction Logic — Verification Results
+
+Local verification confirmed the pipeline runs end to end, but it is **not** a
+clean pass. The findings below are recorded for follow-up.
+
+**Verified correct:**
+
+- All interlocks were extracted accurately, matching both safety constraints in
+  the source text with no fabricated conditions or actions.
+- Sequence steps were extracted in the correct logical order matching the source
+  narrative, with no hallucinated steps.
+- No equipment, interlocks, or steps were invented that are absent from the
+  source text (no fabrication in the populated fields).
+
+**Known issues:**
+
+- **Equipment omission:** the "Emergency Stop button" mentioned in the source
+  text's safety constraints was NOT included in `equipment_list`, even though it
+  is referenced inside an interlock condition. The equipment list is therefore
+  incomplete relative to the schema's instruction to capture "all distinct
+  equipment items mentioned anywhere in the requirement."
+- **Field misuse in `Equipment`:** engineering tags (e.g. "EV-101") were
+  embedded inside the `type` field (e.g. "Valve/Actuator (EV-101)") instead of
+  the `name` field as the schema intends, leaving `name` and `type`
+  inconsistently populated across equipment items.
+- **Formatting inconsistency in `ControlSequence.description`:** several steps
+  contain embedded `\n\t` line breaks and inline sub-labels (e.g. "Action:",
+  "Condition:") rather than a single coherent natural-language sentence as the
+  schema field description specifies.
+
+**Planned follow-up:**
+
+- Strengthen the system prompt to explicitly require that (a) every piece of
+  equipment mentioned anywhere in the text — including equipment referenced only
+  inside interlock conditions — must appear in `equipment_list`, and (b) the
+  `name` field must use the engineering tag when present, with the `type` field
+  holding only the normalized category.
+- Constrain `ControlSequence.description` to a single-line, plain-sentence format
+  with no embedded line breaks or labels, to keep the field reliably parseable
+  downstream.
+
+##### Local vs. Cloud Extraction Comparison
+
+The same input (`sample_control.txt`) was parsed with both backends — local LM
+Studio and the cloud `gemini-2.5-flash` via the `api` backend (run at the time
+as `--backend gemini`, since renamed to `--backend api` with no functional
+change). Both runs extracted all interlocks and sequence steps correctly with no
+fabricated content. The cloud run improved on every local-run issue logged in
+Verification Results above:
+
+| Issue (see Verification Results above) | Local | Cloud (`api`) |
+|---|---|---|
+| Equipment completeness | 4/5 items (Emergency Stop omitted) | 5/5 items |
+| `name`/`type` field convention | Tag embedded in `type` | Tag in `name`, clean category in `type` |
+| `description` formatting | Embedded `\n\t` and inline labels | Single-line plain sentences |
+| Interlock condition phrasing | States the prohibition as the condition | States the triggering event as the condition |
+
+Note: both runs share one schema limitation (not attributable to either
+backend) — `ControlSequence` has no separate field for a step's triggering
+condition, so trigger info is folded into the description; a potential future
+schema enhancement, not an extraction defect.
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
@@ -314,6 +451,7 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 | E1S3T3 | Started Weaviate and verified the local metadata API |
 | E1S4T1 | Added LlamaIndex ingestion and query scripts for the Siemens manual RAG prototype |
 | E1S4T2 | Added LangChain ingestion (`lc_ingest.py`) and query (`lc_query.py`) scripts targeting a separate `LangChainSiemens` Weaviate index for framework comparison |
+| E2S1 | Implemented `src/req_parser.py` (all six components) and locally verified structured extraction against `sample_control.txt`; documented known issues (Emergency Stop omitted from `equipment_list`, engineering tags placed in `type` instead of `name`, and embedded line breaks/labels in `ControlSequence.description`) for prompt follow-up |
 
 ## 📜 Branch History
 
@@ -328,3 +466,6 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
   over Weaviate and LM Studio.
 - **main** (`E1S4T2`): LangChain ingestion and LCEL-based query pipeline over
   Weaviate and LM Studio for LlamaIndex comparison.
+- **feature/epic2-agent** (`E2S1`): Pydantic `SystemRequirement` schemas and the
+  `src/req_parser.py` natural-language requirement parser with structured JSON
+  output, locally verified against `sample_control.txt`.

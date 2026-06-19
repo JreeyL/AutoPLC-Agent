@@ -108,3 +108,8 @@ This document serves as a lightweight project management tracker representing a 
 * **[E1S4T2] Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LangChain**
 * **[E1S4T3] Evaluate LangChain vs. LlamaIndex for this specific AutoPLC use case. Document the findings and finalize framework selection.**
 
+### EPIC-2: Core Agent Pipeline
+
+#### E2S1: Natural-language requirement ingestion
+* **[E2S1T1] Develop the parser and input interface for control sequences, equipment behavior, and interlocks.**
+
