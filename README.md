@@ -5,12 +5,16 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S1 - Natural-language requirement ingestion` is
-> complete. `src/req_parser.py` extracts equipment, control sequences, and
-> safety interlocks from free-form requirements into a validated
-> `SystemRequirement` JSON schema. Two parallel RAG prototypes over a Siemens
-> manual (LlamaIndex and LangChain) remain in place, while downstream PLC
-> generation has not yet been implemented.
+> **Project status:** `E2S2 - BDD/Gherkin generation` is complete.
+> `src/gherkin_gen.py` converts a parsed `SystemRequirement` JSON file into a
+> standard Gherkin `.feature` file, turning each control-sequence step and each
+> interlock into its own `Given/When/Then` scenario. This builds on the
+> complete `E2S1 - Natural-language requirement ingestion` stage, where
+> `src/req_parser.py` extracts equipment, control sequences, and safety
+> interlocks from free-form requirements into a validated `SystemRequirement`
+> JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
+> LangChain) remain in place, while downstream AST/JSON modeling and PLC code
+> generation have not yet been implemented.
 
 ## Table of Contents
 
@@ -79,6 +83,15 @@ The following capabilities define the planned product scope:
   LangChain `with_structured_output` against either a local LM Studio
   (`--backend local`) or a Gemini cloud (`--backend api`) backend, writing the
   result to a backend-tagged `data/parsed/<name>_parsed_<backend>.json` file.
+- **Gherkin generation pipeline** (`src/gherkin_gen.py`) that converts a parsed
+  `SystemRequirement` JSON file into a standard Gherkin `.feature` file. It maps
+  each `ControlSequence` step and each `Interlock` into its own
+  `GherkinScenario` via a per-item `with_structured_output` call (defined in
+  `src/gherkin_schemas.py`), isolating failures so one bad item is skipped with
+  a warning rather than aborting the file. A deterministic, non-LLM renderer
+  then formats the assembled `GherkinFeature` into syntactically correct
+  `Given/When/Then` output, written to a backend-tagged
+  `data/gherkin/<name>_<backend>.feature` file.
 
 ## 🧭 Workflow and Architecture
 
@@ -260,6 +273,33 @@ extractions for the same input file coexist and can be diffed to compare
 extraction quality. Rerunning the same backend overwrites only that backend's
 own file.
 
+### Run the Gherkin Generator
+
+Convert a parsed `SystemRequirement` JSON file (the output of the requirement
+parser above, **not** a raw `.txt` requirement) into a Gherkin `.feature` file:
+
+```bash
+source venv/bin/activate
+python -m src.gherkin_gen data/parsed/sample_control_parsed_local.json
+```
+
+The generator makes one structured-output call per control-sequence step and
+per interlock, assembles the resulting scenarios into a `GherkinFeature`, and
+writes a `.feature` file to `data/gherkin/` (creating the directory if needed).
+Like the parser, it accepts `--backend {local,api}` (default `local`); pass
+`--backend api` with `GEMINI_API_KEY` set to generate through the Gemini cloud
+API:
+
+```bash
+python -m src.gherkin_gen data/parsed/sample_control_parsed_local.json --backend api
+```
+
+The output filename's backend suffix reflects the `--backend` actually used for
+generation, not the backend tagged on the input JSON. For example, the command
+above reads a `_parsed_local.json` input but, generating with `--backend api`,
+writes `data/gherkin/sample_control_api.feature` — so local and cloud Gherkin
+runs over the same requirement coexist and can be diffed.
+
 ## 📦 Project Structure
 
 ```text
@@ -269,9 +309,12 @@ AutoPLC-Agent/
 ├── data/
 │   ├── requirements/ # Input natural-language requirement .txt files
 │   ├── parsed/       # Structured SystemRequirement JSON output
+│   ├── gherkin/      # Generated Gherkin .feature output
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
+│   ├── gherkin_gen.py     # SystemRequirement JSON to Gherkin .feature generator
+│   ├── gherkin_schemas.py # Pydantic GherkinScenario/GherkinFeature schemas
 │   ├── ingest.py     # LlamaIndex ingestion into Weaviate (SiemensManual index)
 │   ├── lc_ingest.py  # LangChain ingestion into Weaviate (LangChainSiemens index)
 │   ├── lc_query.py   # LangChain RAG query over Weaviate and LM Studio
@@ -305,7 +348,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | RAG framework | LangChain + LCEL | Prototype implemented |
 | Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` | In use |
 | Structured extraction | Pydantic + LangChain `with_structured_output` | In use |
-| Requirements format | BDD / Gherkin syntax | Planned |
+| Requirements format | BDD / Gherkin syntax | Implemented (`src/gherkin_gen.py`) |
 | Intermediate representation | AST / JSON | Planned |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
 | Interchange format | PLCopen XML | Planned |
@@ -438,6 +481,27 @@ backend) — `ControlSequence` has no separate field for a step's triggering
 condition, so trigger info is folded into the description; a potential future
 schema enhancement, not an extraction defect.
 
+#### E2S2: BDD/Gherkin generation and validation
+
+- [x] **E2S2T1 - Prompt engineering to convert requirements into Gherkin `Feature`, `Scenario`, `Given`, `When`, `Then` syntax**
+
+`src/gherkin_schemas.py` defines the `GherkinScenario` and `GherkinFeature`
+Pydantic schemas, and `src/gherkin_gen.py` implements the generation pipeline:
+it reads a parsed `SystemRequirement` JSON file, makes one
+`with_structured_output(GherkinScenario)` call per control-sequence step and per
+interlock (mapping step descriptions and interlock condition/action into
+`Given/When/Then`), and stamps each scenario with its `source_step_id` or verbatim
+`source_interlock_condition` for traceability. Per-item generation isolates
+failures — a single failed item is skipped with a warning instead of aborting the
+file. A separate, deterministic non-LLM renderer guarantees syntactically correct
+`.feature` output regardless of model quality, and one additional LLM call
+generates the feature title and description before the `GherkinFeature` is
+assembled in Python. Output is written to a backend-tagged
+`data/gherkin/<name>_<backend>.feature` file, where the suffix reflects the
+`--backend` used for generation. The pipeline was locally verified end to end
+against both backends (LM Studio `local` and Gemini `api`), producing valid
+`.feature` files for the `signal_light_demo` requirement.
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
@@ -452,6 +516,7 @@ schema enhancement, not an extraction defect.
 | E1S4T1 | Added LlamaIndex ingestion and query scripts for the Siemens manual RAG prototype |
 | E1S4T2 | Added LangChain ingestion (`lc_ingest.py`) and query (`lc_query.py`) scripts targeting a separate `LangChainSiemens` Weaviate index for framework comparison |
 | E2S1 | Implemented `src/req_parser.py` (all six components) and locally verified structured extraction against `sample_control.txt`; documented known issues (Emergency Stop omitted from `equipment_list`, engineering tags placed in `type` instead of `name`, and embedded line breaks/labels in `ControlSequence.description`) for prompt follow-up |
+| E2S2T1 | Added `src/gherkin_schemas.py` (`GherkinScenario`/`GherkinFeature`) and the `src/gherkin_gen.py` per-item Gherkin generation pipeline with failure isolation and a deterministic `.feature` renderer; locally verified end to end against both `local` and `api` backends |
 
 ## 📜 Branch History
 
@@ -469,3 +534,7 @@ schema enhancement, not an extraction defect.
 - **feature/epic2-agent** (`E2S1`): Pydantic `SystemRequirement` schemas and the
   `src/req_parser.py` natural-language requirement parser with structured JSON
   output, locally verified against `sample_control.txt`.
+- **feature/epic2-agent** (`E2S2T1`): Pydantic `GherkinScenario`/`GherkinFeature`
+  schemas and the `src/gherkin_gen.py` per-item Gherkin generation pipeline that
+  converts parsed `SystemRequirement` JSON into a `.feature` file, locally
+  verified against both the `local` and `api` backends.
