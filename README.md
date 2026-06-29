@@ -502,6 +502,12 @@ assembled in Python. Output is written to a backend-tagged
 against both backends (LM Studio `local` and Gemini `api`), producing valid
 `.feature` files for the `signal_light_demo` requirement.
 
+**Verification Results & Enhancements:**
+
+- **Backend & Rate Limiting:** Migrated the `api` backend to `gemini-3.1-flash-lite` for higher free-tier limits and added a `--call-delay` argument to prevent rate-limit exhaustion during multi-call runs.
+- **Hallucination Prevention (Fixed):** Replaced case-by-case prompt patching with deterministic Python checks to reliably catch LLM fabrication. Added `flag_unsupported_given()` to strip `given` entries that lack grounding in the source text, and added checks to filter empty fields before rendering. These checks successfully caught and removed hallucinated placeholders from the `local` backend.
+- **Scenario Naming (Deferred):** The `local` backend occasionally hallucinates ungrounded `GherkinScenario.name` fields (e.g., mislabeling an interlock). The planned fix is to extend the same grounding-check pattern to the `name` field rather than relying on further prompt tuning.
+
 ## 👥 Contributors
 
 | Task ID | Contribution |

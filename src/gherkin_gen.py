@@ -22,7 +22,9 @@ Usage::
 """
 
 import argparse
+import re
 import sys
+import time
 from pathlib import Path
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -74,8 +76,12 @@ STEP_MAPPING = (
     "- given: the pre-condition(s) that must already hold before this step.\n"
     "- when: the triggering action that starts this step.\n"
     "- then: the resulting outcome once the action completes.\n"
+    "If the source item's description does not state or clearly imply a "
+    "precondition, return an empty list for 'given' rather than inventing one. "
+    "An empty given list is valid per the schema and is strongly preferred over "
+    "fabricated content such as 'the system is ready'.\n"
     "Example: from 'When the operator presses the start pushbutton, SL-301 "
-    "must turn green.' produce given=['the system is ready'], when=['the "
+    "must turn green.' produce given=[] (no precondition stated), when=['the "
     "operator presses the start pushbutton'], then=['the signal light SL-301 "
     "turns green']."
 )
@@ -87,6 +93,11 @@ INTERLOCK_MAPPING = (
     "'condition' (the hazardous state and the moment it occurs).\n"
     "- then: the forced safety response described by the interlock's "
     "'action'.\n"
+    "If the interlock's condition does not state or clearly imply a separate "
+    "precondition that must already hold, return an empty list for 'given' "
+    "rather than inventing one. An empty given list is valid per the schema and "
+    "is strongly preferred over fabricated content such as 'the system is "
+    "ready'.\n"
     "Example: from condition='Emergency Stop button is pressed', "
     "action='SL-301 must immediately switch to red' produce when=['the "
     "operator presses the Emergency Stop button'], then=['the signal light "
@@ -154,8 +165,65 @@ def resolve_output_path(input_path: Path, backend: str) -> tuple[Path, str]:
     return output_dir / f"{stem}_{backend}.feature", stem
 
 
+# Tokens below this length are too generic to count as concrete grounding
+# (articles, prepositions, "is", "the", ...). 4+ characters keeps real
+# domain words (signal, light, pump, green, pressed, ...) while discarding
+# filler, with no hand-maintained stop-word list to drift out of date.
+_MIN_GROUNDING_WORD_LEN = 4
+
+
+def _content_words(text: str) -> set[str]:
+    """Lowercased alphanumeric/hyphen tokens of meaningful length."""
+    return {
+        word
+        for word in re.findall(r"[a-z0-9\-]+", text.lower())
+        if len(word) >= _MIN_GROUNDING_WORD_LEN
+    }
+
+
+def flag_unsupported_given(
+    scenario: GherkinScenario,
+    source_text: str,
+    equipment_names: list[str],
+) -> GherkinScenario:
+    """Drop fabricated 'given' steps that share no grounding with the source.
+
+    Deterministic, prompt-independent backstop against invented preconditions
+    (e.g. a generic "the system is ready"). A given entry is kept only if it
+    is concretely grounded in the item it came from -- it either mentions an
+    equipment name from ``equipment_names`` or shares at least one meaningful
+    content word with ``source_text``. Anything else is dropped with a warning.
+    Empty/whitespace-only entries are left untouched here; they are handled by
+    :func:`render_feature`'s filter. No LLM call is made. Mutates and returns
+    ``scenario`` for convenience.
+    """
+    equip_lower = [name.lower() for name in equipment_names if name.strip()]
+    source_words = _content_words(source_text)
+
+    kept: list[str] = []
+    for entry in scenario.given:
+        text = entry.strip()
+        if not text:
+            # Empty entry: render_feature() is responsible for filtering it.
+            kept.append(entry)
+            continue
+        lowered = text.lower()
+        grounded = any(name in lowered for name in equip_lower) or bool(
+            _content_words(text) & source_words
+        )
+        if grounded:
+            kept.append(entry)
+        else:
+            print(
+                f"⚠️  Scenario '{scenario.name}': dropped ungrounded given "
+                f"entry: '{text}'"
+            )
+    scenario.given = kept
+    return scenario
+
+
 def scenario_from_step(
-    structured_llm, step: ControlSequence
+    structured_llm, step: ControlSequence, equipment_names: list[str]
 ) -> GherkinScenario:
     """Run one per-item LLM call converting a ControlSequence step."""
     prompt = ChatPromptTemplate.from_messages(
@@ -172,11 +240,13 @@ def scenario_from_step(
     # Stamp provenance deterministically rather than trusting the model.
     scenario.source_step_id = step.step_id
     scenario.source_interlock_condition = None
+    # Deterministic backstop against fabricated preconditions.
+    flag_unsupported_given(scenario, step.description, equipment_names)
     return scenario
 
 
 def scenario_from_interlock(
-    structured_llm, interlock: Interlock
+    structured_llm, interlock: Interlock, equipment_names: list[str]
 ) -> GherkinScenario:
     """Run one per-item LLM call converting an Interlock."""
     prompt = ChatPromptTemplate.from_messages(
@@ -195,6 +265,9 @@ def scenario_from_interlock(
     # Interlock has no numeric id; trace back by its verbatim condition text.
     scenario.source_step_id = None
     scenario.source_interlock_condition = interlock.condition
+    # The given/when derive from the interlock's condition, so ground against
+    # that text. Deterministic backstop against fabricated preconditions.
+    flag_unsupported_given(scenario, interlock.condition, equipment_names)
     return scenario
 
 
@@ -229,7 +302,9 @@ def render_feature(feature: GherkinFeature) -> str:
     Guarantees syntactic correctness regardless of LLM output quality: it only
     formats keywords and indentation, never inspects content. The first item in
     each Given/When/Then list uses the bare keyword; subsequent items use
-    ``And``.
+    ``And``. Empty/whitespace-only steps are filtered before rendering so a
+    bare ``Given``/``When``/``Then`` line can never be emitted; a removal is
+    reported as a warning rather than fixed silently.
     """
     lines: list[str] = [f"Feature: {feature.title}"]
     for desc_line in feature.description.splitlines() or [feature.description]:
@@ -243,7 +318,15 @@ def render_feature(feature: GherkinFeature) -> str:
             ("When", scenario.when),
             ("Then", scenario.then),
         ):
-            for index, step in enumerate(steps):
+            filtered = [step for step in steps if step.strip()]
+            removed = len(steps) - len(filtered)
+            if removed:
+                entry_word = "entry" if removed == 1 else "entries"
+                print(
+                    f"⚠️  Scenario '{scenario.name}': filtered {removed} empty "
+                    f"{keyword.lower()} {entry_word}"
+                )
+            for index, step in enumerate(filtered):
                 word = keyword if index == 0 else "And"
                 lines.append(f"    {word} {step}")
 
@@ -272,6 +355,15 @@ def parse_args() -> argparse.Namespace:
         "cloud API (requires GEMINI_API_KEY) for demos where local inference "
         "is too slow.",
     )
+    parser.add_argument(
+        "--call-delay",
+        type=float,
+        default=5.0,
+        help="Seconds to sleep after each per-item LLM call, applied ONLY when "
+        "--backend api (the local backend is never delayed). The 5-second "
+        "default targets roughly 12 requests/minute, leaving headroom under "
+        "the api backend's 15 RPM free-tier ceiling.",
+    )
     return parser.parse_args()
 
 
@@ -289,18 +381,27 @@ def main() -> None:
 
     # Components 2 & 3: one per-item structured call each, with failure
     # isolation -- a single failed item is warned about and skipped.
+    # Equipment names ground the deterministic given-fabrication check below.
+    equipment_names = [e.name for e in requirement.equipment_list]
+
     scenarios: list[GherkinScenario] = []
     seq_count = 0
     for step in requirement.sequences:
         print(f"Generating scenario for sequence step {step.step_id}...", flush=True)
         try:
-            scenarios.append(scenario_from_step(structured_llm, step))
+            scenarios.append(
+                scenario_from_step(structured_llm, step, equipment_names)
+            )
             seq_count += 1
         except Exception as exc:  # noqa: BLE001 - isolate per-item failure.
             print(
                 f"⚠️  Skipping sequence step {step.step_id}: generation "
                 f"failed ({exc})"
             )
+        # Space out api calls to stay under the free-tier RPM ceiling; the
+        # local backend has no such limit so it is never delayed.
+        if args.backend == "api":
+            time.sleep(args.call_delay)
 
     interlock_count = 0
     for interlock in requirement.interlocks:
@@ -309,13 +410,21 @@ def main() -> None:
             flush=True,
         )
         try:
-            scenarios.append(scenario_from_interlock(structured_llm, interlock))
+            scenarios.append(
+                scenario_from_interlock(
+                    structured_llm, interlock, equipment_names
+                )
+            )
             interlock_count += 1
         except Exception as exc:  # noqa: BLE001 - isolate per-item failure.
             print(
                 f"⚠️  Skipping interlock '{interlock.condition}': generation "
                 f"failed ({exc})"
             )
+        # Space out api calls to stay under the free-tier RPM ceiling; the
+        # local backend has no such limit so it is never delayed.
+        if args.backend == "api":
+            time.sleep(args.call_delay)
 
     # One additional real LLM call for the feature title/description, then
     # assemble the final GherkinFeature in Python from the collected scenarios.

@@ -70,7 +70,11 @@ BASE_URL = os.getenv("LM_STUDIO_BASE_URL", f"http://{get_wsl_host_ip()}:1234/v1"
 GEMINI_BASE_URL = os.getenv(
     "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai/"
 )
-GEMINI_MODEL = "gemini-2.5-flash"
+# Switched from "gemini-2.5-flash", whose free-tier limit on this project is a
+# restrictive 5 RPM / 20 RPD. "gemini-3.1-flash-lite" has a more generous
+# 15 RPM / 500 RPD free-tier allowance (per Google AI Studio's rate-limit
+# dashboard) while keeping the same OpenAI-compatible structured-output support.
+GEMINI_MODEL = "gemini-3.1-flash-lite"
 
 
 def build_llm(backend: str) -> ChatOpenAI:
