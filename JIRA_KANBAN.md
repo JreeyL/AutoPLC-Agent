@@ -10,6 +10,27 @@ This document serves as a lightweight project management tracker representing a 
 
 ---
 
+## 📌 Interim Presentation Feedback (8 Jul 2026)
+
+Action items captured from supervisor's feedback during the interim presentation.
+
+* **RAG Pipeline Stress Testing (EPIC-1 follow-up)**
+  * Large document test: evaluate retrieval quality and response accuracy on a long document (e.g. 50+ pages) to assess how the pipeline degrades at scale.
+  * Context window saturation test: observe generation quality when retrieved chunks fill the LLM's context window.
+  * Input format diversity test (student-added): extend beyond `.txt` to PDF and other formats; verify that format conversion does not degrade retrieval quality.
+  * Not blocking EPIC-2 progress; can be pursued in parallel.
+
+* **RPC / Structured Function-Call Integration (E2S3 consideration)**
+  * Kieran suggested exploring RPC (Remote Procedure Call) as a design pattern for LLM invocation: rather than having the LLM emit free-form JSON, structure its output as a trigger for a concrete function call (analogous to OpenAI function calling / tool use).
+  * For E2S3 AST generation, this translates to a third candidate approach alongside (a) direct LLM JSON output and (b) third-party parsing library: (c) LLM triggers a structured AST builder via a function-call interface. All three approaches to be evaluated on output quality and correctness.
+
+* **Negative / Failure-Path Testing (ongoing, all stages)**
+  * Current verification samples are all simple happy-path inputs (signal light, basic valve control). Kieran noted the lack of failure-path and edge-case testing.
+  * Planned: introduce more complex, realistic industrial requirement texts; design explicit negative test cases covering ambiguous or incomplete requirements, contradictory interlock conditions, and inputs missing key equipment information.
+  * Applies across E2S1, E2S2, and future E2S3/E2S4 stages.
+
+---
+
 ## 📝 To Do
 
 ### EPIC-1: Infrastructure & Environment Setup
