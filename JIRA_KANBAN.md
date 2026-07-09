@@ -74,6 +74,10 @@ Action items captured from supervisor's feedback during the interim presentation
 
 #### E2S3: AST/JSON intermediate representation
 * **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
+  * Delivered in three commits, one per candidate approach:
+  * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
+  * Approach B — third-party parsing library to assist AST construction (planned).
+  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
 
 #### E2S4: IEC 61131-3 ST and LD generation
 * **[E2S4T1]** Develop generation logic targeting Structured Text and Ladder Diagram from the AST.
@@ -91,7 +95,14 @@ Action items captured from supervisor's feedback during the interim presentation
 
 ## 🏃 In Progress
 
-*(No tasks currently in progress)*
+### EPIC-2: Core Agent Pipeline
+
+#### E2S3: AST/JSON intermediate representation
+* **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
+  * Delivered in three commits, one per candidate approach:
+  * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
+  * Approach B — third-party parsing library to assist AST construction (planned).
+  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
 
 ---
 
