@@ -76,7 +76,7 @@ Action items captured from supervisor's feedback during the interim presentation
 * **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
   * Delivered in three commits, one per candidate approach:
   * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
-  * Approach B — third-party parsing library to assist AST construction (planned).
+  * Approach B — deterministic gherkin-official construction: zero-LLM src/ast_gen_B.py using rule-based text matching (complete).
   * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
 
 #### E2S4: IEC 61131-3 ST and LD generation
@@ -95,14 +95,7 @@ Action items captured from supervisor's feedback during the interim presentation
 
 ## 🏃 In Progress
 
-### EPIC-2: Core Agent Pipeline
-
-#### E2S3: AST/JSON intermediate representation
-* **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
-  * Delivered in three commits, one per candidate approach:
-  * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
-  * Approach B — third-party parsing library to assist AST construction (planned).
-  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
+*(No tasks currently in progress)*
 
 ---
 
@@ -144,4 +137,10 @@ Action items captured from supervisor's feedback during the interim presentation
 
 #### E2S1: Natural-language requirement ingestion
 * **[E2S1T1] Develop the parser and input interface for control sequences, equipment behavior, and interlocks.**
+
+#### E2S3: AST/JSON intermediate representation
+* **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
+  * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
+  * Approach B — deterministic gherkin-official construction: zero-LLM src/ast_gen_B.py using rule-based text matching (complete).
+  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
 

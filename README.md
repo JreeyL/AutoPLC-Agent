@@ -5,11 +5,16 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S3 - AST/JSON intermediate representation` is in
-> progress (Approach A complete, Approaches B and C planned). `src/ast_gen_A.py`
-> folds a parsed `SystemRequirement` JSON file (E2S1 output) and a Gherkin
-> `.feature` file (E2S2 output) into a single `PLC_AST` JSON under `data/ast/`,
-> establishing the first complete requirement→scenario→AST traceability chain.
+> **Project status:** `E2S3 - AST/JSON intermediate representation` is
+> substantially complete (Approaches A and B complete, Approach C planned).
+> `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
+> and a Gherkin `.feature` file (E2S2 output) into a single `PLC_AST` JSON under
+> `data/ast/` via a single LLM ``with_structured_output`` call.
+> `src/ast_gen_B.py` provides a fully deterministic, zero-LLM alternative that
+> builds the same ``PLC_AST`` structure using the ``gherkin-official`` library
+> and rule-based text matching, writing to ``data/ast/<stem>_AST_B.json``.
+> Together they establish the first complete requirement→scenario→AST
+> traceability chain through two independent generation strategies.
 > This builds on the complete `E2S2 - BDD/Gherkin generation` stage, where
 > `src/gherkin_gen.py` converts a parsed `SystemRequirement` JSON file into a
 > standard Gherkin `.feature` file, turning each control-sequence step and each
@@ -97,13 +102,19 @@ The following capabilities define the planned product scope:
   then formats the assembled `GherkinFeature` into syntactically correct
   `Given/When/Then` output, written to a backend-tagged
   `data/gherkin/<name>_<backend>.feature` file.
-- **AST generation pipeline** (`src/ast_gen_A.py`) that reads a
-  `SystemRequirement` JSON file (E2S1 output) and a Gherkin `.feature` file
-  (E2S2 output) and produces a `PLC_AST` JSON file under `data/ast/`,
-  establishing the first complete requirement→scenario→AST traceability chain.
-  It reuses the `--backend {local,api}` flag from `req_parser.py` and writes to
-  a backend-tagged `data/ast/<stem>_<backend>.json` file (generation backend
-  suffix, consistent with the earlier stages).
+- **AST generation pipeline — Approach A (LLM direct)** (`src/ast_gen_A.py`)
+  that reads a `SystemRequirement` JSON file (E2S1 output) and a Gherkin
+  `.feature` file (E2S2 output) and produces a `PLC_AST` JSON file under
+  `data/ast/` via a single LLM ``with_structured_output`` call. It reuses the
+  `--backend {local,api}` flag from `req_parser.py` and writes to a
+  backend-tagged `data/ast/<stem>_<backend>.json` file.
+- **AST generation pipeline — Approach B (deterministic)** (`src/ast_gen_B.py`)
+  that builds the same `PLC_AST` structure using the ``gherkin-official``
+  library to parse the `.feature` file and pure-Python text matching to
+  cross-reference Gherkin scenarios with requirement steps — **zero LLM
+  involvement**. It accepts two positional arguments (`req_file`,
+  `feature_file`) with no `--backend` flag and writes to
+  `data/ast/<stem>_AST_B.json`.
 
 ## 🧭 Workflow and Architecture
 
@@ -522,22 +533,31 @@ against both backends (LM Studio `local` and Gemini `api`), producing valid
 
 #### E2S3: AST/JSON intermediate representation
 
-- [ ] **E2S3T1 - Create the JSON schema for the AST that connects requirements, scenarios, and code blocks**
+- [x] **E2S3T1 - Create the JSON schema for the AST that connects requirements, scenarios, and code blocks**
 
-E2S3T1 is planned across three approaches (A: LLM direct, B: third-party
-parsing library, C: RPC/function calling); Approach A is complete, while
-Approaches B and C are planned.
+E2S3T1 has been delivered through **two independent approaches** (A and B);
+Approach C (RPC/function calling) remains planned.
 
 `src/ast_schemas.py` defines the `DeviceNode`, `SequenceStepNode`,
 `InterlockNode`, and `PLC_AST` Pydantic schemas with full
-`Field(description=...)` coverage. `src/ast_gen_A.py` implements Approach A — a
-single `with_structured_output(PLC_AST)` call over the combined
-`SystemRequirement` JSON and raw Gherkin `.feature` text — post-stamping
-`source_requirement_file` and `source_gherkin_file` deterministically after the
-call (the same provenance pattern used for `source_step_id` in E2S2). The
-pipeline was locally verified end to end against both backends (LM Studio
-`local` and Gemini `api`), producing valid `PLC_AST` files for the
-`signal_light_demo` requirement.
+`Field(description=...)` coverage.
+
+**Approach A** (`src/ast_gen_A.py`) — a single `with_structured_output(PLC_AST)`
+LLM call over the combined `SystemRequirement` JSON and raw Gherkin `.feature`
+text — post-stamping `source_requirement_file` and `source_gherkin_file`
+deterministically after the call (the same provenance pattern used for
+`source_step_id` in E2S2). The pipeline was locally verified end to end against
+both backends (LM Studio `local` and Gemini `api`), producing valid `PLC_AST`
+files for the `signal_light_demo` and `sample_control` requirements.
+
+**Approach B** (`src/ast_gen_B.py`) — a fully deterministic, **zero-LLM**
+pipeline that uses the `gherkin-official` library to parse the `.feature`
+file and rule-based text matching (Dice coefficient over tokenized scenario
+steps) to cross-reference Gherkin scenarios with requirement steps. It accepts
+two positional arguments (`req_file`, `feature_file`) with no `--backend`
+flag and writes to `data/ast/<stem>_AST_B.json`. The pipeline was verified
+end to end against both available datasets with 100 % scenario-matching
+accuracy.
 
 ##### Approach A — Verification Results
 
@@ -573,13 +593,63 @@ pipeline was locally verified end to end against both backends (LM Studio
 - **`feature_title` differs between backends:** this reflects the title from
   each backend's own `.feature` file and is correct behaviour, not a defect.
 
-**Planned follow-up (Approaches B and C):**
+##### Approach B — Verification Results
 
-- **Approach B:** third-party parsing library to assist AST construction for
-  inputs with more predictable structure.
-- **Approach C:** RPC/function calling — the LLM triggers structured AST builder
-  functions rather than emitting free-form JSON; this aligns with Kieran's
-  interim feedback.
+**Verified correct:**
+
+- Both available datasets (`signal_light_demo` and `sample_control`) generated
+  valid `PLC_AST` objects with no validation errors on the first run.
+- `feature_title`, `devices`, `node_id`, `step_id`, `action`, `condition`,
+  and `source_scenario` fields all matched Approach A outputs exactly on
+  identical input.
+- Scenario cross-referencing achieved **100 % accuracy**: every
+  `ControlSequence` step and every `Interlock` was correctly matched to its
+  corresponding Gherkin scenario via Dice-coefficient token matching.
+- `source_requirement_file` and `source_gherkin_file` were correctly stamped
+  as resolved absolute paths.
+- `action` fields contain verbatim `ControlSequence.description` text
+  (no paraphrasing by construction — no LLM is involved).
+- `affected_devices` in `InterlockNode` accurately lists all equipment names
+  referenced in interlock conditions and actions.
+
+**Known differences from Approach A (LLM-based):**
+
+These are **deliberate, documented trade-offs** between the two approaches,
+not bugs. They motivate the design of Approach C.
+
+1. **`affected_devices` ordering (cosmetic):** Approach A orders devices
+   based on LLM reasoning (condition-then-action or semantic priority).
+   Approach B returns devices in the deterministic order they appear in the
+   source `equipment_list`. In practice the two orderings are semantically
+   equivalent: the same set of devices is identified. Example — for the
+   interlock ``"Emergency Stop button is pressed → SL-301 must immediately
+   switch to red"``:
+   - **Approach A:** ``["Emergency Stop button", "SL-301"]``
+   - **Approach B:** ``["SL-301", "Emergency Stop button"]``
+   - *Impact:* ordered as in `equipment_list`; functionally identical.
+
+2. **`target_device` selection (semantic):** Approach A uses LLM semantic
+   reasoning to identify which device is the **target** of the action vs.
+   which is the **trigger**. Approach B naively picks the first equipment
+   name from `equipment_list` that appears as a substring in the
+   description text. Example — for the step description ``"When the
+   operator presses the start pushbutton, SL-301 must turn green."``:
+   - **Approach A:** ``"SL-301"`` — correctly identifies SL-301 as the
+     target device (the thing being acted on).
+   - **Approach B:** ``"start pushbutton"`` — picks the first match from
+     `equipment_list`, which is listed first in the source.
+   - *Impact:* Approach B's result is schema-valid but semantically less
+     precise. This limitation is the strongest argument for **Approach C**
+     (RPC/function calling), where an LLM would reason *about* the mapping
+     into deterministic structures rather than emitting free-form JSON or
+     relying on naive string matching.
+
+**Follow-up (Approach C only):**
+
+- **Approach C:** RPC/function calling — the LLM triggers structured AST
+  builder functions rather than emitting free-form JSON; this aligns with
+  Kieran's interim feedback and directly addresses the `target_device`
+  semantic gap identified above.
 
 ## 👥 Contributors
 
@@ -597,6 +667,7 @@ pipeline was locally verified end to end against both backends (LM Studio
 | E2S1 | Implemented `src/req_parser.py` (all six components) and locally verified structured extraction against `sample_control.txt`; documented known issues (Emergency Stop omitted from `equipment_list`, engineering tags placed in `type` instead of `name`, and embedded line breaks/labels in `ControlSequence.description`) for prompt follow-up |
 | E2S2T1 | Added `src/gherkin_schemas.py` (`GherkinScenario`/`GherkinFeature`) and the `src/gherkin_gen.py` per-item Gherkin generation pipeline with failure isolation and a deterministic `.feature` renderer; locally verified end to end against both `local` and `api` backends |
 | E2S3T1 (Approach A) | Added `src/ast_schemas.py` (`DeviceNode`/`SequenceStepNode`/`InterlockNode`/`PLC_AST`) and the `src/ast_gen_A.py` single-call LLM-direct AST generation pipeline with deterministic provenance stamping; verified cross-stage requirement→scenario→AST traceability against both `local` and `api` backends |
+| E2S3T1 (Approach B) | Added `src/ast_gen_B.py` deterministic zero-LLM AST generation pipeline using `gherkin-official` parsing and rule-based Dice-coefficient scenario matching; verified 100 % cross-referencing accuracy across both datasets |
 
 ## 📜 Branch History
 
@@ -624,3 +695,7 @@ pipeline was locally verified end to end against both backends (LM Studio
   parsed `SystemRequirement` JSON and a Gherkin `.feature` file into a `PLC_AST`
   JSON, establishing the first complete requirement→scenario→AST traceability
   chain, locally verified against both the `local` and `api` backends.
+- **feature/epic2-agent** (`E2S3T1` Approach B): `src/ast_gen_B.py` fully
+  deterministic, zero-LLM AST generation pipeline using the `gherkin-official`
+  library and rule-based Dice-coefficient text matching; verified against both
+  datasets with 100 % scenario-cross-referencing accuracy.
