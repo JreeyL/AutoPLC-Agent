@@ -6,13 +6,16 @@ turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
 > **Project status:** `E2S3 - AST/JSON intermediate representation` is
-> substantially complete (Approaches A and B complete, Approach C planned).
+> complete across three candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
 > and a Gherkin `.feature` file (E2S2 output) into a single `PLC_AST` JSON under
 > `data/ast/` via a single LLM ``with_structured_output`` call.
 > `src/ast_gen_B.py` provides a fully deterministic, zero-LLM alternative that
 > builds the same ``PLC_AST`` structure using the ``gherkin-official`` library
 > and rule-based text matching, writing to ``data/ast/<stem>_AST_B.json``.
+> `src/ast_gen_C.py` provides an RPC/function-calling alternative: the LLM
+> selects structured semantic mappings for deterministic AST builder functions,
+> while Python owns assembly, validation, grounding, and provenance.
 > Together they establish the first complete requirement→scenario→AST
 > traceability chain through two independent generation strategies.
 > This builds on the complete `E2S2 - BDD/Gherkin generation` stage, where
@@ -115,6 +118,13 @@ The following capabilities define the planned product scope:
   involvement**. It accepts two positional arguments (`req_file`,
   `feature_file`) with no `--backend` flag and writes to
   `data/ast/<stem>_AST_B.json`.
+- **AST generation pipeline — Approach C (RPC/function calling)**
+  (`src/ast_gen_C.py`, with builders in `src/ast_builders.py`) that binds the
+  LLM to per-item builder tools. Device nodes, verbatim source fields, IDs,
+  grounding checks, Pydantic validation, and final assembly remain deterministic
+  Python operations. Run it with `python -m src.ast_gen_C <parsed.json>
+  <feature.feature> --backend {local,api}`; output is
+  `data/ast/<stem>_<backend>_AST_C.json`.
 
 ## 🧭 Workflow and Architecture
 
@@ -535,8 +545,8 @@ against both backends (LM Studio `local` and Gemini `api`), producing valid
 
 - [x] **E2S3T1 - Create the JSON schema for the AST that connects requirements, scenarios, and code blocks**
 
-E2S3T1 has been delivered through **two independent approaches** (A and B);
-Approach C (RPC/function calling) remains planned.
+E2S3T1 has been delivered through **three independent approaches** (A, B, and
+C), retaining one shared `PLC_AST` schema.
 
 `src/ast_schemas.py` defines the `DeviceNode`, `SequenceStepNode`,
 `InterlockNode`, and `PLC_AST` Pydantic schemas with full
@@ -646,10 +656,38 @@ not bugs. They motivate the design of Approach C.
 
 **Follow-up (Approach C only):**
 
-- **Approach C:** RPC/function calling — the LLM triggers structured AST
-  builder functions rather than emitting free-form JSON; this aligns with
-  Kieran's interim feedback and directly addresses the `target_device`
-  semantic gap identified above.
+- **Approach C** (`src/ast_gen_C.py`): RPC/function calling — the LLM triggers
+  structured builder calls rather than emitting the complete AST. Python
+  rejects unsupported calls and rejects targets, affected devices, or scenario
+  links that are not grounded in the two input artifacts. This preserves the
+  semantic target-device advantage of Approach A while reducing the model's
+  ability to corrupt AST structure or traceability.
+
+##### Approach C — Verification Results and trade-offs
+
+The builder/tool-call path was verified with structured mock tool responses on
+both `signal_light_demo` and `sample_control` inputs (local and API artifacts),
+including device counts, verbatim source fields, node IDs, scenario-name
+grounding, affected-device grounding, and final `PLC_AST` validation. A live
+backend run additionally requires LM Studio for `local` or `GEMINI_API_KEY` for
+`api`.
+
+**Approach C note:** After API verification, Approach C was refined so Python
+completes interlock `affected_devices` deterministically: all equipment
+mentioned in the interlock condition or forced action. This keeps equipment
+grounding stable, preserves `equipment_list` order, and avoids partial-name
+matches such as `EV-101` matching `EV-1012`. Verification passed: the second
+`sample_control` interlock includes `EV-101`, `EV-102`, and `Emergency Stop
+button`; the `signal_light_demo` emergency-stop interlock includes `SL-301` and
+`Emergency Stop button`.
+
+Approach C requires one function call per sequence/interlock, so it has more
+latency and tool-calling compatibility requirements than Approach B and more
+calls than Approach A. Its main benefit is the division of responsibility:
+the LLM performs semantic mapping (including the `SL-301` target in the signal
+light example), while deterministic Python controls structure and safety
+traceability. Unsupported or ungrounded calls fail clearly rather than being
+silently added to the AST.
 
 ## 👥 Contributors
 
@@ -668,6 +706,7 @@ not bugs. They motivate the design of Approach C.
 | E2S2T1 | Added `src/gherkin_schemas.py` (`GherkinScenario`/`GherkinFeature`) and the `src/gherkin_gen.py` per-item Gherkin generation pipeline with failure isolation and a deterministic `.feature` renderer; locally verified end to end against both `local` and `api` backends |
 | E2S3T1 (Approach A) | Added `src/ast_schemas.py` (`DeviceNode`/`SequenceStepNode`/`InterlockNode`/`PLC_AST`) and the `src/ast_gen_A.py` single-call LLM-direct AST generation pipeline with deterministic provenance stamping; verified cross-stage requirement→scenario→AST traceability against both `local` and `api` backends |
 | E2S3T1 (Approach B) | Added `src/ast_gen_B.py` deterministic zero-LLM AST generation pipeline using `gherkin-official` parsing and rule-based Dice-coefficient scenario matching; verified 100 % cross-referencing accuracy across both datasets |
+| E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified the builder/tool-call path against `signal_light_demo` and `sample_control` |
 
 ## 📜 Branch History
 

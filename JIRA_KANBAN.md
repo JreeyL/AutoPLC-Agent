@@ -77,7 +77,7 @@ Action items captured from supervisor's feedback during the interim presentation
   * Delivered in three commits, one per candidate approach:
   * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
   * Approach B — deterministic gherkin-official construction: zero-LLM src/ast_gen_B.py using rule-based text matching (complete).
-  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
+  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (complete; `src/ast_builders.py` and `src/ast_gen_C.py`).
 
 #### E2S4: IEC 61131-3 ST and LD generation
 * **[E2S4T1]** Develop generation logic targeting Structured Text and Ladder Diagram from the AST.
@@ -142,5 +142,6 @@ Action items captured from supervisor's feedback during the interim presentation
 * **[E2S3T1]** Create the JSON schema for the AST that connects requirements, scenarios, and code blocks.
   * Approach A — LLM direct: single structured `with_structured_output(PLC_AST)` call over the combined requirement + Gherkin text (complete).
   * Approach B — deterministic gherkin-official construction: zero-LLM src/ast_gen_B.py using rule-based text matching (complete).
-  * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (planned).
-
+  * Approach C — RPC/function calling: LLM triggers structured builder calls for sequence/interlock semantic mappings; Python performs deterministic device construction, grounding checks, Pydantic validation, provenance stamping, and final assembly (complete).
+  * Verification: the builder/tool-call path passed `signal_light_demo` and `sample_control` fixtures, including target-device and scenario grounding. Trade-off: one LLM tool call per sequence/interlock adds latency and requires backend tool-call support, but addresses Approach B's naive first-substring target selection.
+  * After API verification, Approach C was refined so Python completes interlock `affected_devices` deterministically: all equipment mentioned in the interlock condition or forced action. This keeps equipment grounding stable, preserves `equipment_list` order, and avoids partial-name matches such as `EV-101` matching `EV-1012`. Verification passed: the second `sample_control` interlock includes `EV-101`, `EV-102`, and `Emergency Stop button`; the `signal_light_demo` emergency-stop interlock includes `SL-301` and `Emergency Stop button`.
