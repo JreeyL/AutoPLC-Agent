@@ -672,22 +672,46 @@ grounding, affected-device grounding, and final `PLC_AST` validation. A live
 backend run additionally requires LM Studio for `local` or `GEMINI_API_KEY` for
 `api`.
 
-**Approach C note:** After API verification, Approach C was refined so Python
-completes interlock `affected_devices` deterministically: all equipment
-mentioned in the interlock condition or forced action. This keeps equipment
-grounding stable, preserves `equipment_list` order, and avoids partial-name
-matches such as `EV-101` matching `EV-1012`. Verification passed: the second
-`sample_control` interlock includes `EV-101`, `EV-102`, and `Emergency Stop
-button`; the `signal_light_demo` emergency-stop interlock includes `SL-301` and
-`Emergency Stop button`.
+**Local verification fixes:**
 
-Approach C requires one function call per sequence/interlock, so it has more
-latency and tool-calling compatibility requirements than Approach B and more
-calls than Approach A. Its main benefit is the division of responsibility:
-the LLM performs semantic mapping (including the `SL-301` target in the signal
-light example), while deterministic Python controls structure and safety
-traceability. Unsupported or ungrounded calls fail clearly rather than being
-silently added to the AST.
+- **LM Studio tool-calling compatibility:** local LM Studio rejected object-style
+  `tool_choice`, so `_invoke_tool()` now uses `tool_choice="required"` for
+  `local`, while `api` keeps `tool_choice=expected_name`. `_tool_call()` still
+  validates the returned builder name.
+- **Authoritative field protection:** local `sample_control` paraphrased step
+  3's `action`, causing `Function call changed authoritative sequence text for
+  step 3`. Python now overwrites source-owned fields before builder validation:
+  sequence `step_id`, `action`, `source_step_id`; interlock `index`,
+  `condition`, `forced_action`, `priority`.
+
+`affected_devices` is deterministic in Approach C: all equipment mentioned in
+the interlock condition or forced action, preserving `equipment_list` order and
+avoiding partial-name matches such as `EV-101` matching `EV-1012`.
+
+**`signal_light_demo` comparison**
+
+| Output | Result summary |
+| --- | --- |
+| A API | Valid; correctly selects `SL-301`; good condition and scenario links. |
+| B | Valid and deterministic; incorrectly selects `start pushbutton` as `target_device`. |
+| C API | Best result; correctly selects `SL-301`, concise condition, deterministic `affected_devices`. |
+| A local | Valid; selects `SL-301`, but condition/scenario wording depends on local model output. |
+| C local | Runs successfully; structurally valid, but local semantic mapping is weaker (`target_device`, `condition`, or `source_scenario` may be null). |
+
+**`sample_control` comparison**
+
+| Output | Result summary |
+| --- | --- |
+| A API | Valid; strong semantic output, but full AST is generated directly by the LLM. |
+| B | Valid and deterministic; stable target devices and scenario links, but some conditions are more mechanical. |
+| C API | Best result; correct targets, cleaner conditions, deterministic `affected_devices`, Python-controlled assembly. |
+| A local | Valid but model-dependent; some conditions are short or less precise. |
+| C local | Runs successfully after fixes; deterministic fields are stable, but local semantic mapping can still be weaker than API. |
+
+Conclusion: Approach C API is the preferred engineering design because it
+combines LLM semantic mapping with deterministic Python validation, grounding,
+provenance stamping, and AST assembly; local model quality remains the main
+limitation for local verification.
 
 ## 👥 Contributors
 
@@ -706,7 +730,7 @@ silently added to the AST.
 | E2S2T1 | Added `src/gherkin_schemas.py` (`GherkinScenario`/`GherkinFeature`) and the `src/gherkin_gen.py` per-item Gherkin generation pipeline with failure isolation and a deterministic `.feature` renderer; locally verified end to end against both `local` and `api` backends |
 | E2S3T1 (Approach A) | Added `src/ast_schemas.py` (`DeviceNode`/`SequenceStepNode`/`InterlockNode`/`PLC_AST`) and the `src/ast_gen_A.py` single-call LLM-direct AST generation pipeline with deterministic provenance stamping; verified cross-stage requirement→scenario→AST traceability against both `local` and `api` backends |
 | E2S3T1 (Approach B) | Added `src/ast_gen_B.py` deterministic zero-LLM AST generation pipeline using `gherkin-official` parsing and rule-based Dice-coefficient scenario matching; verified 100 % cross-referencing accuracy across both datasets |
-| E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified the builder/tool-call path against `signal_light_demo` and `sample_control` |
+| E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified API/local compatibility fixes and deterministic `affected_devices` completion against `signal_light_demo` and `sample_control` |
 
 ## 📜 Branch History
 
@@ -738,3 +762,7 @@ silently added to the AST.
   deterministic, zero-LLM AST generation pipeline using the `gherkin-official`
   library and rule-based Dice-coefficient text matching; verified against both
   datasets with 100 % scenario-cross-referencing accuracy.
+- **feature/epic2-agent** (`E2S3T1` Approach C): `src/ast_builders.py` and
+  `src/ast_gen_C.py` RPC/function-calling AST generation with backend-specific
+  tool-choice handling, Python-owned authoritative fields, deterministic
+  `affected_devices`, grounding checks, and validated AST assembly.

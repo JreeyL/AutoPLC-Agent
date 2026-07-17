@@ -110,10 +110,21 @@ def _tool_call(message: Any, expected_name: str, label: str) -> dict[str, Any]:
     return args
 
 
-def _invoke_tool(llm: Any, tool: Any, prompt: str, expected_name: str, label: str) -> dict[str, Any]:
+def _invoke_tool(
+    llm: Any,
+    tool: Any,
+    prompt: str,
+    expected_name: str,
+    label: str,
+    backend: str,
+) -> dict[str, Any]:
     """Ask for one tool call and return its structured arguments."""
     try:
-        bound = llm.bind_tools([tool], tool_choice=expected_name)
+        # LM Studio only accepts string tool_choice values such as
+        # "required". Since exactly one tool is bound per call, this still
+        # forces the intended builder. _tool_call() validates the returned name.
+        tool_choice = "required" if backend == "local" else expected_name
+        bound = llm.bind_tools([tool], tool_choice=tool_choice)
         message = bound.invoke(prompt)
         return _tool_call(message, expected_name, label)
     except Exception as exc:  # noqa: BLE001
@@ -170,13 +181,26 @@ def build_ast(req_path: Path, feature_path: Path, backend: str):
             f"step_id: {source.step_id}\naction: {source.description!r}\n"
             f"equipment_list: {equipment_context}\nscenarios: {context}"
         )
-        args = _invoke_tool(llm, build_sequence_step_node, prompt, "build_sequence_step_node", f"sequence step {source.step_id}")
-        if args.get("step_id") != source.step_id or args.get("action") != source.description:
-            raise ValueError(f"Function call changed authoritative sequence text for step {source.step_id}")
+        args = _invoke_tool(
+            llm,
+            build_sequence_step_node,
+            prompt,
+            "build_sequence_step_node",
+            f"sequence step {source.step_id}",
+            backend,
+        )
+        # Local models may paraphrase tool arguments, so Approach C treats the
+        # model output as semantic suggestions only. Python overwrites
+        # authoritative source fields before deterministic AST builders run.
+        args["step_id"] = source.step_id
+        args["action"] = source.description
+        if "source_step_id" in args:
+            args["source_step_id"] = source.step_id
         _validate_choice(args.get("target_device"), equipment_set, "target_device", f"sequence step {source.step_id}")
         scenario = args.get("source_scenario")
         if scenario is not None and scenario not in scenario_names:
             raise ValueError(f"Grounding check failed for sequence step {source.step_id}: source_scenario={scenario!r} is not a real Gherkin scenario")
+        args.pop("source_step_id", None)
         sequence.append(build_sequence_step_node(**args))
 
     interlocks = []
@@ -189,12 +213,23 @@ def build_ast(req_path: Path, feature_path: Path, backend: str):
             f"index: {index}\ncondition: {source.condition!r}\nforced_action: {source.action!r}\n"
             f"equipment_list: {equipment_context}\nscenarios: {context}"
         )
-        args = _invoke_tool(llm, build_interlock_node, prompt, "build_interlock_node", f"interlock {index}")
-        if args.get("index") != index or args.get("condition") != source.condition or args.get("forced_action") != source.action:
-            raise ValueError(f"Function call changed authoritative interlock text for interlock {index}")
+        args = _invoke_tool(
+            llm,
+            build_interlock_node,
+            prompt,
+            "build_interlock_node",
+            f"interlock {index}",
+            backend,
+        )
         affected = args.get("affected_devices")
-        if not isinstance(affected, list) or any(device not in equipment_set for device in affected):
+        if affected is not None and (
+            not isinstance(affected, list) or any(device not in equipment_set for device in affected)
+        ):
             raise ValueError(f"Grounding check failed for interlock {index}: affected_devices={affected!r} is not a subset of equipment_list")
+        args["index"] = index
+        args["condition"] = source.condition
+        args["forced_action"] = source.action
+        args["priority"] = 1
         # Complete affected_devices deterministically from all equipment named
         # in the authoritative condition or forced-action text.  The LLM still
         # performs semantic mapping through the tool call, but cannot omit a
