@@ -26,8 +26,8 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > `src/req_parser.py` extracts equipment, control sequences, and safety
 > interlocks from free-form requirements into a validated `SystemRequirement`
 > JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
-> LangChain) remain in place, while downstream IEC 61131-3 PLC code generation
-> has not yet been implemented.
+> LangChain) remain in place. E2S4 ST/LD output contracts are now defined,
+> while downstream IEC 61131-3 PLC code generation is still deferred.
 
 ## Table of Contents
 
@@ -74,6 +74,8 @@ The following capabilities define the planned product scope:
 - **Traceable intermediate representation** using AST/JSON to connect source
   requirements, scenarios, code blocks, variables, and generated outputs.
 - **IEC 61131-3 code generation** targeting Structured Text and Ladder Diagram.
+- **ST/LD output contracts** (`src/plc_code_schemas.py`) for future
+  IEC 61131-3 Structured Text and Ladder Diagram generation.
 - **PLCopen XML export** for exchanging generated program structures with
   compatible PLC engineering environments.
 - **Validation-oriented workflow** that keeps generated artifacts inspectable
@@ -351,6 +353,7 @@ AutoPLC-Agent/
 │   ├── ingest.py     # LlamaIndex ingestion into Weaviate (SiemensManual index)
 │   ├── lc_ingest.py  # LangChain ingestion into Weaviate (LangChainSiemens index)
 │   ├── lc_query.py   # LangChain RAG query over Weaviate and LM Studio
+│   ├── plc_code_schemas.py # Pydantic ST/LD output contracts
 │   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py # Natural-language requirement parser to structured JSON
 │   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
@@ -713,6 +716,15 @@ combines LLM semantic mapping with deterministic Python validation, grounding,
 provenance stamping, and AST assembly; local model quality remains the main
 limitation for local verification.
 
+#### E2S4: IEC 61131-3 ST and LD generation
+
+- [x] **E2S4T1 - Define ST/LD output contracts**
+
+`src/plc_code_schemas.py` defines the initial schema-only contracts for future
+PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
+output is represented by `LDProgram`, `LDNetwork`, `LDContact`, and `LDCoil`.
+Generation logic is deferred to later E2S4 tasks.
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
@@ -731,6 +743,7 @@ limitation for local verification.
 | E2S3T1 (Approach A) | Added `src/ast_schemas.py` (`DeviceNode`/`SequenceStepNode`/`InterlockNode`/`PLC_AST`) and the `src/ast_gen_A.py` single-call LLM-direct AST generation pipeline with deterministic provenance stamping; verified cross-stage requirement→scenario→AST traceability against both `local` and `api` backends |
 | E2S3T1 (Approach B) | Added `src/ast_gen_B.py` deterministic zero-LLM AST generation pipeline using `gherkin-official` parsing and rule-based Dice-coefficient scenario matching; verified 100 % cross-referencing accuracy across both datasets |
 | E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified API/local compatibility fixes and deterministic `affected_devices` completion against `signal_light_demo` and `sample_control` |
+| E2S4T1 | Defined lightweight Pydantic output contracts for Structured Text blocks and Ladder Diagram intermediate networks in `src/plc_code_schemas.py`; generation logic deferred |
 
 ## 📜 Branch History
 
@@ -766,3 +779,6 @@ limitation for local verification.
   `src/ast_gen_C.py` RPC/function-calling AST generation with backend-specific
   tool-choice handling, Python-owned authoritative fields, deterministic
   `affected_devices`, grounding checks, and validated AST assembly.
+- **feature/epic2-agent** (`E2S4T1`): `src/plc_code_schemas.py` schema-only
+  output contracts for future IEC 61131-3 Structured Text and Ladder Diagram
+  generation.

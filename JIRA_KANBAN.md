@@ -80,7 +80,7 @@ Action items captured from supervisor's feedback during the interim presentation
   * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (complete; `src/ast_builders.py` and `src/ast_gen_C.py`).
 
 #### E2S4: IEC 61131-3 ST and LD generation
-* **[E2S4T1]** Develop generation logic targeting Structured Text and Ladder Diagram from the AST.
+* Generation logic tasks will follow the completed E2S4T1 schema-contract step.
 
 ### EPIC-3: Validation & Export
 
@@ -155,3 +155,7 @@ Action items captured from supervisor's feedback during the interim presentation
 | C local | Runs after fixes; structurally stable, but optional semantic fields may be weaker/null. |
 
   * Conclusion: C API is preferred, while local quality remains model-dependent.
+
+#### E2S4: IEC 61131-3 ST and LD generation
+* **[E2S4T1] Define ST/LD output contracts**
+  * E2S4T1 — Define ST/LD output contracts: added lightweight Pydantic schemas for Structured Text blocks and Ladder Diagram intermediate networks. Generation logic deferred to later E2S4 tasks.
