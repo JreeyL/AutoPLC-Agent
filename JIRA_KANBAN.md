@@ -80,7 +80,24 @@ Action items captured from supervisor's feedback during the interim presentation
   * Approach C — RPC/function calling: LLM triggers structured AST builder functions rather than emitting free-form JSON (complete; `src/ast_builders.py` and `src/ast_gen_C.py`).
 
 #### E2S4: IEC 61131-3 ST and LD generation
-* Generation logic tasks will follow the completed E2S4T1 schema-contract step.
+* Full E2S4 task plan:
+* **[E2S4T1] Define ST/LD output contracts** — complete.
+  * Added lightweight Pydantic schemas for Structured Text blocks and Ladder Diagram intermediate networks.
+* **[E2S4T2] Implement deterministic Structured Text generator** — complete.
+  * Added deterministic AST-to-ST renderer with sanitized variable names, BOOL declarations, sequence IF blocks, safety interlock override blocks, and traceability comments.
+* **[E2S4T3] Implement LD IR generator** — next task.
+  * Create `src/ld_ir_gen.py`.
+  * Write LD intermediate-representation JSON to `data/plc/ld/*.json`.
+  * Generate one network per sequence step and one network per interlock.
+  * Include contacts, coils, and traceability fields using the existing LD output contracts.
+* **[E2S4T4] Output verification** — planned.
+  * Add pytest tests for generated `.st` file structure.
+  * Check required ST sections, variable declarations, traceability comments, and interlock override placement.
+  * Investigate MATIEC for IEC 61131-3 ST syntax / compile checking.
+  * Investigate OpenPLC Editor / Runtime for compiling and validating generated PLC logic.
+  * Keep runtime simulation and vendor-specific Siemens TIA Portal / PLCSIM validation as later-stage work.
+* Ladder Diagram generation, richer ST coverage, PLCopen XML mapping, timers,
+  and vendor-specific export remain future tasks.
 
 ### EPIC-3: Validation & Export
 
@@ -159,3 +176,7 @@ Action items captured from supervisor's feedback during the interim presentation
 #### E2S4: IEC 61131-3 ST and LD generation
 * **[E2S4T1] Define ST/LD output contracts**
   * E2S4T1 — Define ST/LD output contracts: added lightweight Pydantic schemas for Structured Text blocks and Ladder Diagram intermediate networks. Generation logic deferred to later E2S4 tasks.
+* **[E2S4T2] Implement deterministic Structured Text generator**
+  * E2S4T2 — Implement ST generator: added deterministic AST-to-ST renderer with sanitized variable names, BOOL declarations, sequence IF blocks, safety interlock override blocks, and traceability comments. Verified against signal_light_demo and sample_control AST outputs.
+  * Known limitation: current ST output is a deterministic MVP draft. It does not yet model signal-light colour states, sequence state, timers, or analogue thresholds.
+  * Deferred: pytest structural checks, MATIEC syntax checking, and OpenPLC Editor / Runtime validation are planned under E2S4T4 Output Verification.

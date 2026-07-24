@@ -5,8 +5,10 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S3 - AST/JSON intermediate representation` is
-> complete across three candidate approaches (A, B, and C).
+> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has its first
+> deterministic Structured Text draft generator.
+> `E2S3 - AST/JSON intermediate representation` is complete across three
+> candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
 > and a Gherkin `.feature` file (E2S2 output) into a single `PLC_AST` JSON under
 > `data/ast/` via a single LLM ``with_structured_output`` call.
@@ -26,8 +28,9 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > `src/req_parser.py` extracts equipment, control sequences, and safety
 > interlocks from free-form requirements into a validated `SystemRequirement`
 > JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
-> LangChain) remain in place. E2S4 ST/LD output contracts are now defined,
-> while downstream IEC 61131-3 PLC code generation is still deferred.
+> LangChain) remain in place. E2S4 ST/LD output contracts are defined, and
+> `src/st_gen.py` now renders deterministic MVP Structured Text drafts from
+> validated `PLC_AST` JSON. Ladder Diagram generation remains deferred.
 
 ## Table of Contents
 
@@ -76,6 +79,10 @@ The following capabilities define the planned product scope:
 - **IEC 61131-3 code generation** targeting Structured Text and Ladder Diagram.
 - **ST/LD output contracts** (`src/plc_code_schemas.py`) for future
   IEC 61131-3 Structured Text and Ladder Diagram generation.
+- **Deterministic Structured Text draft generation** (`src/st_gen.py`) from
+  validated `PLC_AST` JSON, producing BOOL declarations, sequence `IF` blocks,
+  safety interlock override blocks, and traceability comments under
+  `data/plc/st/*.st`.
 - **PLCopen XML export** for exchanging generated program structures with
   compatible PLC engineering environments.
 - **Validation-oriented workflow** that keeps generated artifacts inspectable
@@ -335,6 +342,22 @@ above reads a `_parsed_local.json` input but, generating with `--backend api`,
 writes `data/gherkin/sample_control_api.feature` — so local and cloud Gherkin
 runs over the same requirement coexist and can be diffed.
 
+### Run the Structured Text Generator
+
+Convert a validated `PLC_AST` JSON file into a deterministic MVP Structured Text
+draft:
+
+```bash
+source venv/bin/activate
+python -m src.st_gen data/ast/signal_light_demo_api_AST_C.json
+python -m src.st_gen data/ast/sample_control_api_AST_C.json
+```
+
+The generator builds an `STProgram` contract object, renders BOOL declarations,
+sequence `IF` blocks, safety interlock override blocks, and traceability
+comments, then writes `.st` files to `data/plc/st/`. Generated ST is a draft
+and requires engineer review before any PLC use.
+
 ## 📦 Project Structure
 
 ```text
@@ -345,9 +368,16 @@ AutoPLC-Agent/
 │   ├── requirements/ # Input natural-language requirement .txt files
 │   ├── parsed/       # Structured SystemRequirement JSON output
 │   ├── gherkin/      # Generated Gherkin .feature output
+│   ├── ast/          # Generated PLC_AST JSON output
+│   ├── plc/st/       # Generated Structured Text draft output
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
+│   ├── ast_builders.py    # Deterministic AST builder helpers for Approach C
+│   ├── ast_gen_A.py       # LLM-direct SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_gen_B.py       # Deterministic SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_gen_C.py       # RPC/function-calling SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_schemas.py     # Pydantic PLC_AST schemas
 │   ├── gherkin_gen.py     # SystemRequirement JSON to Gherkin .feature generator
 │   ├── gherkin_schemas.py # Pydantic GherkinScenario/GherkinFeature schemas
 │   ├── ingest.py     # LlamaIndex ingestion into Weaviate (SiemensManual index)
@@ -357,6 +387,7 @@ AutoPLC-Agent/
 │   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py # Natural-language requirement parser to structured JSON
 │   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
+│   ├── st_gen.py     # Deterministic PLC_AST to Structured Text draft generator
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
 ├── docker-compose.yml # Local Weaviate service definition
@@ -385,8 +416,8 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Embeddings | HuggingFace `BAAI/bge-small-en-v1.5` | In use |
 | Structured extraction | Pydantic + LangChain `with_structured_output` | In use |
 | Requirements format | BDD / Gherkin syntax | Implemented (`src/gherkin_gen.py`) |
-| Intermediate representation | AST / JSON | Planned |
-| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | Planned |
+| Intermediate representation | AST / JSON | Implemented (`PLC_AST`) |
+| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft generator implemented; LD planned |
 | Interchange format | PLCopen XML | Planned |
 | Experimentation | Jupyter notebooks | Planned |
 
@@ -719,11 +750,33 @@ limitation for local verification.
 #### E2S4: IEC 61131-3 ST and LD generation
 
 - [x] **E2S4T1 - Define ST/LD output contracts**
+- [x] **E2S4T2 - Implement deterministic Structured Text generator**
+- [ ] **E2S4T3 - Implement LD IR generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
 output is represented by `LDProgram`, `LDNetwork`, `LDContact`, and `LDCoil`.
-Generation logic is deferred to later E2S4 tasks.
+E2S4T2 adds `src/st_gen.py`, a deterministic MVP ST generator from `PLC_AST`.
+It renders BOOL declarations, sequence `IF` blocks, interlock override blocks,
+and traceability comments, with output written to `data/plc/st/*.st`.
+Generated ST is a draft and requires engineer review.
+
+Next implementation task: E2S4T3 will add `src/ld_ir_gen.py`, a deterministic
+PLC_AST-to-LD intermediate-representation generator. The first MVP should write
+JSON outputs to `data/plc/ld/*.json`, generating one LD network per sequence
+step and one per interlock, using contacts, coils, and traceability fields from
+the existing `LDProgram` / `LDNetwork` contracts.
+
+Known MVP limitations: The generated ST files are draft outputs for review. In
+`signal_light_demo`, the BOOL-only model cannot fully represent green/red
+signal-light states. In `sample_control`, some steps remain TODO comments
+because sequence state, timer logic, and analogue conditions are not yet
+supported. These are deferred to later E2S4 refinement and verification tasks,
+not blockers for E2S4T2.
+
+Next verification work will be handled under E2S4T4 Output Verification,
+including pytest-based structure checks, MATIEC syntax/compile investigation,
+and OpenPLC Editor / Runtime validation exploration.
 
 ## 👥 Contributors
 
@@ -744,6 +797,7 @@ Generation logic is deferred to later E2S4 tasks.
 | E2S3T1 (Approach B) | Added `src/ast_gen_B.py` deterministic zero-LLM AST generation pipeline using `gherkin-official` parsing and rule-based Dice-coefficient scenario matching; verified 100 % cross-referencing accuracy across both datasets |
 | E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified API/local compatibility fixes and deterministic `affected_devices` completion against `signal_light_demo` and `sample_control` |
 | E2S4T1 | Defined lightweight Pydantic output contracts for Structured Text blocks and Ladder Diagram intermediate networks in `src/plc_code_schemas.py`; generation logic deferred |
+| E2S4T2 | Added `src/st_gen.py`, a deterministic `PLC_AST` to Structured Text draft renderer with sanitized variable names, BOOL declarations, sequence `IF` blocks, safety interlock overrides, and traceability comments; verified against `signal_light_demo` and `sample_control` AST outputs |
 
 ## 📜 Branch History
 
@@ -782,3 +836,6 @@ Generation logic is deferred to later E2S4 tasks.
 - **feature/epic2-agent** (`E2S4T1`): `src/plc_code_schemas.py` schema-only
   output contracts for future IEC 61131-3 Structured Text and Ladder Diagram
   generation.
+- **feature/epic2-agent** (`E2S4T2`): `src/st_gen.py` deterministic
+  `PLC_AST` to Structured Text draft generation, writing review-required
+  `.st` output to `data/plc/st/`.
