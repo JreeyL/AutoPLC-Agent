@@ -115,6 +115,14 @@ class LDNetwork(BaseModel):
         default=None,
         description="Traceability link to the source interlock condition text.",
     )
+    source_condition: Optional[str] = Field(
+        default=None,
+        description="Traceability link to the source condition text used for contacts.",
+    )
+    notes: list[str] = Field(
+        default_factory=list,
+        description="Review notes for MVP limitations or unsupported mappings.",
+    )
 
 
 class LDProgram(BaseModel):

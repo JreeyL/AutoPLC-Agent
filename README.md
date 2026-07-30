@@ -5,8 +5,8 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has its first
-> deterministic Structured Text draft generator.
+> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has deterministic
+> MVP Structured Text and Ladder Diagram IR generators.
 > `E2S3 - AST/JSON intermediate representation` is complete across three
 > candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
@@ -30,7 +30,8 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
 > LangChain) remain in place. E2S4 ST/LD output contracts are defined, and
 > `src/st_gen.py` now renders deterministic MVP Structured Text drafts from
-> validated `PLC_AST` JSON. Ladder Diagram generation remains deferred.
+> validated `PLC_AST` JSON, and `src/ld_ir_gen.py` writes structured LD IR JSON
+> to `data/plc/ld/*.json`.
 
 ## Table of Contents
 
@@ -417,7 +418,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Structured extraction | Pydantic + LangChain `with_structured_output` | In use |
 | Requirements format | BDD / Gherkin syntax | Implemented (`src/gherkin_gen.py`) |
 | Intermediate representation | AST / JSON | Implemented (`PLC_AST`) |
-| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft generator implemented; LD planned |
+| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft generator and LD IR generator MVP implemented |
 | Interchange format | PLCopen XML | Planned |
 | Experimentation | Jupyter notebooks | Planned |
 
@@ -751,7 +752,7 @@ limitation for local verification.
 
 - [x] **E2S4T1 - Define ST/LD output contracts**
 - [x] **E2S4T2 - Implement deterministic Structured Text generator**
-- [ ] **E2S4T3 - Implement LD IR generator**
+- [x] **E2S4T3 - Implement LD IR generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
@@ -761,18 +762,35 @@ It renders BOOL declarations, sequence `IF` blocks, interlock override blocks,
 and traceability comments, with output written to `data/plc/st/*.st`.
 Generated ST is a draft and requires engineer review.
 
-Next implementation task: E2S4T3 will add `src/ld_ir_gen.py`, a deterministic
-PLC_AST-to-LD intermediate-representation generator. The first MVP should write
-JSON outputs to `data/plc/ld/*.json`, generating one LD network per sequence
-step and one per interlock, using contacts, coils, and traceability fields from
-the existing `LDProgram` / `LDNetwork` contracts.
+E2S4T3 adds `src/ld_ir_gen.py`, a deterministic AST-to-LD-IR generator. It
+outputs structured LD JSON under `data/plc/ld/*.json`. LD IR represents
+sequence and interlock logic as networks with contacts, coils, priority, and
+traceability links. It supports basic controlled action-to-coil mapping:
+positive actions such as open, start, on, energize, activate, and run map to
+set coils; negative/deactivation actions such as close, stop, off,
+de-energize, deactivate, and reset map to reset coils. Interlock forced actions
+use the same deterministic classifier. Matching is case-insensitive and
+boundary-safe; ambiguous or negated action text falls back to a normal coil.
+This is not graphical LD and not PLCopen XML yet. Generated LD IR is an MVP
+draft and requires engineer review.
 
-Known MVP limitations: The generated ST files are draft outputs for review. In
-`signal_light_demo`, the BOOL-only model cannot fully represent green/red
-signal-light states. In `sample_control`, some steps remain TODO comments
-because sequence state, timer logic, and analogue conditions are not yet
-supported. These are deferred to later E2S4 refinement and verification tasks,
-not blockers for E2S4T2.
+The current regenerated LD IR examples are:
+`signal_light_demo_api_AST_C_ld.json` with 2 networks, and
+`sample_control_api_AST_C_ld.json` with 8 networks. Sequence networks appear
+before safety interlock networks. Multi-target interlocks are split into one
+coil per network.
+
+Known MVP limitations: The generated ST and LD IR files are draft outputs for
+review. In `signal_light_demo`, the BOOL-only model cannot fully represent
+green/red signal-light states. In `sample_control`, some steps remain
+structurally incomplete because sequence state, timer logic, analogue
+conditions, parallel LD branches, graphical layout, and vendor-specific
+PLCopen XML export are not yet supported. LD contacts currently represent only
+simple positive AND conditions as serial normally-open contacts. OR,
+negation, timers, durations, and analogue/numeric comparisons are marked with
+explicit `notes` metadata rather than silently approximated. These are
+deferred to later E2S4 refinement and verification tasks, not blockers for
+E2S4T3.
 
 Next verification work will be handled under E2S4T4 Output Verification,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
@@ -798,6 +816,7 @@ and OpenPLC Editor / Runtime validation exploration.
 | E2S3T1 (Approach C) | Added `src/ast_builders.py` deterministic validated builders and `src/ast_gen_C.py` RPC/function-calling AST generation with equipment/scenario grounding checks; verified API/local compatibility fixes and deterministic `affected_devices` completion against `signal_light_demo` and `sample_control` |
 | E2S4T1 | Defined lightweight Pydantic output contracts for Structured Text blocks and Ladder Diagram intermediate networks in `src/plc_code_schemas.py`; generation logic deferred |
 | E2S4T2 | Added `src/st_gen.py`, a deterministic `PLC_AST` to Structured Text draft renderer with sanitized variable names, BOOL declarations, sequence `IF` blocks, safety interlock overrides, and traceability comments; verified against `signal_light_demo` and `sample_control` AST outputs |
+| E2S4T3 | Added `src/ld_ir_gen.py`, a deterministic `PLC_AST` to LD IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes; verified against `signal_light_demo` and `sample_control` AST outputs |
 
 ## 📜 Branch History
 
@@ -839,3 +858,6 @@ and OpenPLC Editor / Runtime validation exploration.
 - **feature/epic2-agent** (`E2S4T2`): `src/st_gen.py` deterministic
   `PLC_AST` to Structured Text draft generation, writing review-required
   `.st` output to `data/plc/st/`.
+- **feature/epic2-agent** (`E2S4T3`): `src/ld_ir_gen.py` deterministic
+  `PLC_AST` to LD IR JSON generation, writing review-required structured
+  outputs to `data/plc/ld/`.
