@@ -5,8 +5,10 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has deterministic
-> MVP Structured Text and Ladder Diagram IR generators.
+> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has
+> deterministic MVP Structured Text and Ladder Diagram IR generators, plus a
+> separate `llm_direct` Structured Text generation approach for backend
+> comparison.
 > `E2S3 - AST/JSON intermediate representation` is complete across three
 > candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
@@ -30,8 +32,9 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
 > LangChain) remain in place. E2S4 ST/LD output contracts are defined, and
 > `src/st_gen.py` now renders deterministic MVP Structured Text drafts from
-> validated `PLC_AST` JSON, and `src/ld_ir_gen.py` writes structured LD IR JSON
-> to `data/plc/ld/*.json`.
+> validated `PLC_AST` JSON, `src/st_gen_llm_direct.py` asks an LLM to directly
+> draft Structured Text with backend-specific output suffixes, and
+> `src/ld_ir_gen.py` writes structured LD IR JSON to `data/plc/ld/*.json`.
 
 ## Table of Contents
 
@@ -84,6 +87,9 @@ The following capabilities define the planned product scope:
   validated `PLC_AST` JSON, producing BOOL declarations, sequence `IF` blocks,
   safety interlock override blocks, and traceability comments under
   `data/plc/st/*.st`.
+- **LLM Direct Structured Text draft generation** (`src/st_gen_llm_direct.py`)
+  from validated `PLC_AST` JSON, producing backend-specific comparison outputs
+  with `_st_llm_direct_api.st` and `_st_llm_direct_local.st` suffixes.
 - **PLCopen XML export** for exchanging generated program structures with
   compatible PLC engineering environments.
 - **Validation-oriented workflow** that keeps generated artifacts inspectable
@@ -359,6 +365,47 @@ sequence `IF` blocks, safety interlock override blocks, and traceability
 comments, then writes `.st` files to `data/plc/st/`. Generated ST is a draft
 and requires engineer review before any PLC use.
 
+To compare LLM-direct ST generation against the deterministic Python renderer,
+run:
+
+```bash
+python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend api
+python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend local
+python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend api
+python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend local
+```
+
+LLM Direct outputs are written beside the deterministic ST files using
+backend-specific suffixes: `_st_llm_direct_api.st` and
+`_st_llm_direct_local.st`. The wrapper validates the input with `PLC_AST`,
+constructs the prompt, calls the selected backend, strips accidental Markdown
+fences, checks for basic ST structure (`PROGRAM`, `VAR`, `END_VAR`,
+`END_PROGRAM`, and executable-looking `IF` / `END_IF` counts), and writes the
+file only if those checks pass. MATIEC/OpenPLC/runtime validation is not
+performed yet.
+
+Current ST generation comparison:
+
+| Generator | Output suffix | Current behavior |
+| --- | --- | --- |
+| Deterministic Python (`src/st_gen.py`) | `<stem>.st` | Most stable and reproducible. Keeps traceability and uses conservative TODO comments where logic is unsupported. Does not yet model signal-light colour states, sequence state, timers, or analogue thresholds. |
+| LLM Direct API (`src/st_gen_llm_direct.py --backend api`) | `<stem>_st_llm_direct_api.st` | Cleaner LLM Direct MVP draft in the current examples. Generally follows sequence-before-safety ordering and uses TODO comments for unsupported timer, analogue, colour-state, and complex logic. |
+| LLM Direct local (`src/st_gen_llm_direct.py --backend local`) | `<stem>_st_llm_direct_local.st` | Useful cross-backend comparison artifact, but slower and more speculative. Current outputs attempt richer state/timer structure and show higher syntax or semantic risk; do not treat as validated PLC code. |
+
+Implementation verification for LLM Direct ST was run with:
+
+```bash
+python -m py_compile src/st_gen_llm_direct.py
+python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend api
+python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend local
+python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend api
+python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend local
+git diff --check
+```
+
+Both API and local backend outputs were generated for the two current example
+AST files. `git diff --check` passed with line-ending warnings only.
+
 ## 📦 Project Structure
 
 ```text
@@ -389,6 +436,7 @@ AutoPLC-Agent/
 │   ├── req_parser.py # Natural-language requirement parser to structured JSON
 │   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
 │   ├── st_gen.py     # Deterministic PLC_AST to Structured Text draft generator
+│   ├── st_gen_llm_direct.py # LLM-direct PLC_AST to Structured Text draft generator
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
 ├── .gitignore        # Repository ignore rules
 ├── docker-compose.yml # Local Weaviate service definition
@@ -753,6 +801,7 @@ limitation for local verification.
 - [x] **E2S4T1 - Define ST/LD output contracts**
 - [x] **E2S4T2 - Implement deterministic Structured Text generator**
 - [x] **E2S4T3 - Implement LD IR generator**
+- [x] **E2S4T5 - Add LLM Direct Structured Text generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
@@ -761,6 +810,15 @@ E2S4T2 adds `src/st_gen.py`, a deterministic MVP ST generator from `PLC_AST`.
 It renders BOOL declarations, sequence `IF` blocks, interlock override blocks,
 and traceability comments, with output written to `data/plc/st/*.st`.
 Generated ST is a draft and requires engineer review.
+
+E2S4T5 adds `src/st_gen_llm_direct.py`, a separate `llm_direct` ST generation
+approach. It validates `PLC_AST` input, asks the selected backend to directly
+produce plain Structured Text, performs light structural checks, and writes
+backend-specific outputs using `_st_llm_direct_api.st` or
+`_st_llm_direct_local.st`. Both API and local backend runs completed for the
+two current example AST files. These outputs are comparison artifacts for model
+capability, prompt-following, backend reliability, and engineering constraint
+evaluation; they do not replace the deterministic Python ST generator.
 
 E2S4T3 adds `src/ld_ir_gen.py`, a deterministic AST-to-LD-IR generator. It
 outputs structured LD JSON under `data/plc/ld/*.json`. LD IR represents
@@ -790,7 +848,11 @@ simple positive AND conditions as serial normally-open contacts. OR,
 negation, timers, durations, and analogue/numeric comparisons are marked with
 explicit `notes` metadata rather than silently approximated. These are
 deferred to later E2S4 refinement and verification tasks, not blockers for
-E2S4T3.
+E2S4T3. LLM Direct ST outputs can also vary by backend: the API output followed
+the requested sequence-before-interlock ordering more closely in the current
+run, while local output showed prompt-following weaknesses such as reordered
+safety logic and more speculative state/timer structure. These are comparison
+findings, not completed validation.
 
 Next verification work will be handled under E2S4T4 Output Verification,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
@@ -817,6 +879,7 @@ and OpenPLC Editor / Runtime validation exploration.
 | E2S4T1 | Defined lightweight Pydantic output contracts for Structured Text blocks and Ladder Diagram intermediate networks in `src/plc_code_schemas.py`; generation logic deferred |
 | E2S4T2 | Added `src/st_gen.py`, a deterministic `PLC_AST` to Structured Text draft renderer with sanitized variable names, BOOL declarations, sequence `IF` blocks, safety interlock overrides, and traceability comments; verified against `signal_light_demo` and `sample_control` AST outputs |
 | E2S4T3 | Added `src/ld_ir_gen.py`, a deterministic `PLC_AST` to LD IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes; verified against `signal_light_demo` and `sample_control` AST outputs |
+| E2S4T5 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
 
 ## 📜 Branch History
 
@@ -861,3 +924,6 @@ and OpenPLC Editor / Runtime validation exploration.
 - **feature/epic2-agent** (`E2S4T3`): `src/ld_ir_gen.py` deterministic
   `PLC_AST` to LD IR JSON generation, writing review-required structured
   outputs to `data/plc/ld/`.
+- **feature/epic2-agent** (`E2S4T5`): `src/st_gen_llm_direct.py` separate
+  `llm_direct` ST draft generation for local/API backend comparison, writing
+  `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs.

@@ -99,6 +99,11 @@ Action items captured from supervisor's feedback during the interim presentation
   * Investigate MATIEC for IEC 61131-3 ST syntax / compile checking.
   * Investigate OpenPLC Editor / Runtime for compiling and validating generated PLC logic.
   * Keep runtime simulation and vendor-specific Siemens TIA Portal / PLCSIM validation as later-stage work.
+* **[E2S4T5] Add LLM Direct Structured Text generator** — complete.
+  * Added `src/st_gen_llm_direct.py` as a separate `llm_direct` approach, not a replacement for deterministic `src/st_gen.py`.
+  * Supports `--backend api` and `--backend local`, writing `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs for comparison.
+  * Performs PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks before saving generated text.
+  * Current comparison: deterministic Python ST is most stable and conservative; API LLM Direct output is cleaner and more conservative than local; local LLM Direct output is useful for cross-backend comparison but slower, more speculative, and less stable.
 * Graphical Ladder Diagram rendering, richer ST/LD coverage, PLCopen XML
   mapping, timers, and vendor-specific export remain future tasks.
 
@@ -186,3 +191,8 @@ Action items captured from supervisor's feedback during the interim presentation
 * **[E2S4T3] Implement LD IR generator**
   * E2S4T3 — Implement LD IR generator: added deterministic AST-to-LD-IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes. Verified against signal_light_demo and sample_control AST outputs.
   * Known limitation: current LD IR is a structural MVP, not graphical LD or PLCopen XML. It represents only simple positive AND conditions as serial normally-open contacts and does not yet support graphical layout, parallel branches, timers, analogue thresholds, runtime validation, or vendor-specific PLCopen XML export.
+* **[E2S4T5] Add LLM Direct Structured Text generator**
+  * E2S4T5 — Add LLM Direct ST generator: added `src/st_gen_llm_direct.py`, a separate `llm_direct` AST-to-ST renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks. Generated API and local comparison outputs for signal_light_demo and sample_control.
+  * Comparison: deterministic Python ST remains the most reproducible baseline; API LLM Direct is the cleaner MVP LLM draft and follows sequence-before-safety ordering more closely; local LLM Direct is slower and more speculative, with higher syntax/semantic risk.
+  * Verification recorded: `py_compile`, both API runs, both local runs, and `git diff --check` completed during implementation; `git diff --check` reported line-ending warnings only.
+  * Known limitation: generated ST remains MVP draft output. MATIEC syntax checking, OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to E2S4T4 or later.

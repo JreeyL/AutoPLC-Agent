@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python -m py_compile src/ast_schemas.py src/ast_gen_A.py)",
-      "Bash(python *)"
-    ]
-  }
-}
