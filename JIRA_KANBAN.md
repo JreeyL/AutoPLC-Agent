@@ -104,6 +104,14 @@ Action items captured from supervisor's feedback during the interim presentation
   * Supports `--backend api` and `--backend local`, writing `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs for comparison.
   * Performs PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks before saving generated text.
   * Current comparison: deterministic Python ST is most stable and conservative; API LLM Direct output is cleaner and more conservative than local; local LLM Direct output is useful for cross-backend comparison but slower, more speculative, and less stable.
+* **[E2S4T6] Add LLM Direct LD IR generator** — complete.
+  * Added `src/ld_ir_gen_llm_direct.py` as a separate `llm_direct` approach, not a replacement for deterministic `src/ld_ir_gen.py`.
+  * Supports `--backend api` and `--backend local`, writing `_ld_llm_direct_api.json` and `_ld_llm_direct_local.json` outputs where generation completes.
+  * Performs PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks before saving generated JSON.
+  * Prompt now explicitly distinguishes sequence-first array ordering from safety/interlock logical priority, requires multi-target interlock splitting, enforces IEC-compatible variable naming, and keeps unsupported timer/analogue/sequence-state logic as TODO notes.
+  * Added validation-feedback retry handling for JSON parsing, LDProgram schema, or light-validation failures; local uses schema-guided JSON output.
+  * Troubleshooting note: local Gemma E4B initially failed on the larger `sample_control` case due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
+  * API and local backends generated both example LD Direct outputs, including `sample_control_api_AST_C_ld_llm_direct_local.json`.
 * Graphical Ladder Diagram rendering, richer ST/LD coverage, PLCopen XML
   mapping, timers, and vendor-specific export remain future tasks.
 
@@ -196,3 +204,10 @@ Action items captured from supervisor's feedback during the interim presentation
   * Comparison: deterministic Python ST remains the most reproducible baseline; API LLM Direct is the cleaner MVP LLM draft and follows sequence-before-safety ordering more closely; local LLM Direct is slower and more speculative, with higher syntax/semantic risk.
   * Verification recorded: `py_compile`, both API runs, both local runs, and `git diff --check` completed during implementation; `git diff --check` reported line-ending warnings only.
   * Known limitation: generated ST remains MVP draft output. MATIEC syntax checking, OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to E2S4T4 or later.
+* **[E2S4T6] Add LLM Direct LD IR generator**
+  * E2S4T6 — Add LLM Direct LD IR generator: added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` AST-to-LD-IR JSON renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks.
+  * Prompt refinement: sequence networks must appear before interlock networks despite higher logical safety priority; multi-target interlocks must split into one network per target coil; contact/coil variables must be IEC-compatible; unsupported timer/analogue/sequence-state logic must remain notes plus valid placeholder variables.
+  * Retry handling: API gets one validation-feedback retry; local gets two validation-feedback retries and uses `json_schema` response format to keep larger LD IR JSON structurally valid.
+  * Troubleshooting result: local Gemma E4B initially failed on `sample_control` due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
+  * Verification recorded: `py_compile`, both API runs, both local runs, existing LD IR unit tests, and `git diff --check` completed. API and local backends generated `signal_light_demo` and `sample_control` LD Direct outputs.
+  * Known limitation: generated LD IR remains MVP draft output. API output is useful for comparison, while local output remains more model-dependent; graphical LD, PLCopen XML, MATIEC/OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to E2S4T4 or later.

@@ -6,9 +6,9 @@ turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
 > **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has
-> deterministic MVP Structured Text and Ladder Diagram IR generators, plus a
-> separate `llm_direct` Structured Text generation approach for backend
-> comparison.
+> deterministic MVP Structured Text and Ladder Diagram IR generators, plus
+> separate `llm_direct` Structured Text and LD IR generation approaches for
+> backend comparison.
 > `E2S3 - AST/JSON intermediate representation` is complete across three
 > candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
@@ -33,8 +33,10 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > LangChain) remain in place. E2S4 ST/LD output contracts are defined, and
 > `src/st_gen.py` now renders deterministic MVP Structured Text drafts from
 > validated `PLC_AST` JSON, `src/st_gen_llm_direct.py` asks an LLM to directly
-> draft Structured Text with backend-specific output suffixes, and
-> `src/ld_ir_gen.py` writes structured LD IR JSON to `data/plc/ld/*.json`.
+> draft Structured Text with backend-specific output suffixes, `src/ld_ir_gen.py`
+> writes structured LD IR JSON to `data/plc/ld/*.json`, and
+> `src/ld_ir_gen_llm_direct.py` asks an LLM to directly draft LD IR JSON for
+> backend comparison.
 
 ## Table of Contents
 
@@ -90,6 +92,10 @@ The following capabilities define the planned product scope:
 - **LLM Direct Structured Text draft generation** (`src/st_gen_llm_direct.py`)
   from validated `PLC_AST` JSON, producing backend-specific comparison outputs
   with `_st_llm_direct_api.st` and `_st_llm_direct_local.st` suffixes.
+- **LLM Direct Ladder Diagram IR draft generation**
+  (`src/ld_ir_gen_llm_direct.py`) from validated `PLC_AST` JSON, producing
+  backend-specific comparison outputs with `_ld_llm_direct_api.json` and
+  `_ld_llm_direct_local.json` suffixes where the backend completes.
 - **PLCopen XML export** for exchanging generated program structures with
   compatible PLC engineering environments.
 - **Validation-oriented workflow** that keeps generated artifacts inspectable
@@ -406,6 +412,50 @@ git diff --check
 Both API and local backend outputs were generated for the two current example
 AST files. `git diff --check` passed with line-ending warnings only.
 
+### Run the Ladder Diagram IR Generators
+
+Generate deterministic LD IR JSON from a validated `PLC_AST` file:
+
+```bash
+python -m src.ld_ir_gen data/ast/signal_light_demo_api_AST_C.json
+python -m src.ld_ir_gen data/ast/sample_control_api_AST_C.json
+```
+
+Deterministic LD IR output uses `<stem>_ld.json` under `data/plc/ld/`.
+
+To compare LLM-direct LD IR generation, run:
+
+```bash
+python -m src.ld_ir_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend api
+python -m src.ld_ir_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend local
+python -m src.ld_ir_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend api
+python -m src.ld_ir_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend local
+```
+
+LLM Direct LD IR outputs use `_ld_llm_direct_api.json` and
+`_ld_llm_direct_local.json` suffixes. The wrapper validates the input with
+`PLC_AST`, asks the selected backend for plain JSON, strips accidental Markdown
+fences, parses JSON, validates against `LDProgram`, checks unique network IDs,
+required coils, allowed contact/coil types, traceability, and sequence-before-
+interlock ordering, then writes only validated JSON. The LLM Direct LD prompt
+now explicitly separates sequence-first JSON array ordering from safety logical
+priority, requires one network per target coil for multi-target interlocks,
+requires IEC-compatible variable names, and keeps unsupported timer/analogue/
+sequence-state logic as TODO notes with structurally valid placeholder
+variables. Local generation uses schema-guided JSON output, allows two
+validation-feedback retries, and writes the file only after validation passes.
+
+Current API and local runs generated both example outputs successfully,
+including `sample_control_api_AST_C_ld_llm_direct_local.json`.
+
+Troubleshooting note: the local Gemma E4B backend initially failed on the
+larger `sample_control` case because it placed interlocks before sequence
+networks, emitted invalid variable names such as percent-bearing identifiers,
+and used weak marker coils instead of direct target reset coils. Prompt
+hardening plus validation-feedback retry now saves an 8-network valid JSON
+artifact for local `sample_control`. API output remains more stable and
+traceable; local output is usable for comparison but still model-dependent.
+
 ## 📦 Project Structure
 
 ```text
@@ -435,6 +485,7 @@ AutoPLC-Agent/
 │   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py # Natural-language requirement parser to structured JSON
 │   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
+│   ├── ld_ir_gen_llm_direct.py # LLM-direct PLC_AST to LD IR JSON generator
 │   ├── st_gen.py     # Deterministic PLC_AST to Structured Text draft generator
 │   ├── st_gen_llm_direct.py # LLM-direct PLC_AST to Structured Text draft generator
 │   └── test_llm.py   # WSL-to-LM Studio API connectivity test
@@ -802,6 +853,7 @@ limitation for local verification.
 - [x] **E2S4T2 - Implement deterministic Structured Text generator**
 - [x] **E2S4T3 - Implement LD IR generator**
 - [x] **E2S4T5 - Add LLM Direct Structured Text generator**
+- [x] **E2S4T6 - Add LLM Direct LD IR generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
@@ -838,6 +890,22 @@ The current regenerated LD IR examples are:
 before safety interlock networks. Multi-target interlocks are split into one
 coil per network.
 
+E2S4T6 adds `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` LD IR
+generation approach. It validates `PLC_AST` input, asks the selected backend to
+directly produce LD IR JSON, validates the result against `LDProgram`, performs
+light structural checks, and writes backend-specific outputs using
+`_ld_llm_direct_api.json` or `_ld_llm_direct_local.json`. API and local backend
+generation completed for both current example AST files. The LD Direct prompt
+explicitly requires sequence networks before interlock networks, separates
+logical safety priority from JSON array order, splits multi-target interlocks
+into one network per target coil, uses IEC-compatible variable names, and
+records unsupported timer/analogue/sequence-state logic in notes. Local backend
+generation now uses `json_schema` response format plus validation-feedback
+retries to produce valid LD Direct JSON for both examples. The local Gemma E4B
+backend initially failed on `sample_control` due to ordering, variable naming,
+and weak interlock coil issues; after prompt hardening and retry feedback it
+now saves an 8-network valid JSON artifact.
+
 Known MVP limitations: The generated ST and LD IR files are draft outputs for
 review. In `signal_light_demo`, the BOOL-only model cannot fully represent
 green/red signal-light states. In `sample_control`, some steps remain
@@ -852,7 +920,11 @@ E2S4T3. LLM Direct ST outputs can also vary by backend: the API output followed
 the requested sequence-before-interlock ordering more closely in the current
 run, while local output showed prompt-following weaknesses such as reordered
 safety logic and more speculative state/timer structure. These are comparison
-findings, not completed validation.
+findings, not completed validation. LLM Direct LD IR API output is a useful
+comparison draft and now splits `sample_control` multi-target interlocks into
+one network per target coil. Current local outputs for `signal_light_demo` and
+`sample_control` passed validation and were saved, but local generation remains
+more model-dependent and should be reviewed carefully before downstream use.
 
 Next verification work will be handled under E2S4T4 Output Verification,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
@@ -880,6 +952,7 @@ and OpenPLC Editor / Runtime validation exploration.
 | E2S4T2 | Added `src/st_gen.py`, a deterministic `PLC_AST` to Structured Text draft renderer with sanitized variable names, BOOL declarations, sequence `IF` blocks, safety interlock overrides, and traceability comments; verified against `signal_light_demo` and `sample_control` AST outputs |
 | E2S4T3 | Added `src/ld_ir_gen.py`, a deterministic `PLC_AST` to LD IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes; verified against `signal_light_demo` and `sample_control` AST outputs |
 | E2S4T5 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
+| E2S4T6 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
 
 ## 📜 Branch History
 
@@ -927,3 +1000,7 @@ and OpenPLC Editor / Runtime validation exploration.
 - **feature/epic2-agent** (`E2S4T5`): `src/st_gen_llm_direct.py` separate
   `llm_direct` ST draft generation for local/API backend comparison, writing
   `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs.
+- **feature/epic2-agent** (`E2S4T6`): `src/ld_ir_gen_llm_direct.py` separate
+  `llm_direct` LD IR JSON generation for backend comparison, writing
+  `_ld_llm_direct_api.json` and `_ld_llm_direct_local.json` outputs where
+  generation completes.
