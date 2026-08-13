@@ -8,6 +8,7 @@ from src.st_gen_hybrid import (
     _parse_analogue_entry,
     _parse_colour_entry,
     _parse_timer_entry,
+    _validate_interlock_intent,
     _validate_sequence_intent,
     build_hybrid_st_program,
     render_st_program,
@@ -61,6 +62,55 @@ class IntentNormalizationTests(unittest.TestCase):
         self.assertEqual(hyphen["duration_seconds"], 5.0)
         bare = _parse_timer_entry("5")
         self.assertEqual(bare["duration_seconds"], 5.0)
+
+    def test_colour_compact_mapping_parses(self) -> None:
+        # E2B-style backends return a keyed mapping {device: colour} instead of
+        # a list of objects; the parser must normalize it deterministically.
+        parsed = _parse_colour_entry({"SL-301": "green"}, _DEVICES)
+        self.assertEqual(
+            (parsed["device"], parsed["colour"], parsed["description"]),
+            ("SL-301", "green", ""),
+        )
+
+    def test_analogue_compact_mapping_parses(self) -> None:
+        parsed = _parse_analogue_entry({"tank level sensor": ">= 80"}, _DEVICES)
+        self.assertEqual(
+            (parsed["device"], parsed["operator"], parsed["threshold"]),
+            ("tank level sensor", ">=", 80.0),
+        )
+
+    def test_timer_compact_mapping_parses(self) -> None:
+        parsed = _parse_timer_entry({"settling delay": "5s"})
+        self.assertEqual(
+            (parsed["duration_seconds"], parsed["description"]),
+            (5.0, "settling delay"),
+        )
+
+    def test_validate_accepts_compact_mapping(self) -> None:
+        # End-to-end through the validation path that previously aborted on
+        # the E2B local backend: colour_states as a top-level keyed mapping.
+        intent = _validate_sequence_intent(
+            {"colour_states": {"SL-301": "green"}}, _DEVICES, 1
+        )
+        self.assertEqual(intent.colour_states[0].colour, "green")
+
+    def test_compact_mapping_still_grounds_device(self) -> None:
+        with self.assertRaises(ValueError):
+            _validate_sequence_intent(
+                {"colour_states": {"Halloween light": "green"}}, _DEVICES, 1
+            )
+
+    def test_unparseable_colour_degrades_to_note(self) -> None:
+        # E2B sometimes returns a condition text (e.g. 'Emergency Stop button
+        # pressed') as a colour-state entry; comment-bearing intent degrades
+        # to a review note instead of aborting the whole draft.
+        intent = _validate_interlock_intent(
+            {"colour_states": ["Emergency Stop button pressed"]}, _DEVICES, 1
+        )
+        self.assertEqual(intent.colour_states, [])
+        self.assertTrue(
+            any("Emergency Stop button pressed" in n for n in intent.state_notes)
+        )
 
 
 class HybridRenderTests(unittest.TestCase):

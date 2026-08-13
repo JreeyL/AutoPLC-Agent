@@ -207,7 +207,17 @@ def _longest_matching_device(text: str, device_names: set[str]) -> str | None:
 
 
 def _parse_colour_entry(item: Any, device_names: set[str]) -> dict[str, Any]:
-    """Normalize a colour-state entry (dict or 'device: colour' string) to a dict."""
+    """Normalize a colour-state entry (dict or 'device: colour' string) to a dict.
+
+    A compact E2B-style mapping ``{device: colour}`` (a single-entry dict
+    without the schema's own ``device`` key) is rewritten to the shared
+    ``device: colour`` text form so the parser below extracts the colour
+    and any trailing description deterministically.
+    """
+    if isinstance(item, dict) and "device" not in item and len(item) == 1:
+        (device, value), = item.items()
+        if value is not None:
+            item = f"{device}: {value}"
     if isinstance(item, dict):
         return item
     text = str(item).strip()
@@ -225,7 +235,17 @@ def _parse_colour_entry(item: Any, device_names: set[str]) -> dict[str, Any]:
 
 
 def _parse_analogue_entry(item: Any, device_names: set[str]) -> dict[str, Any]:
-    """Normalize an analogue entry (dict or 'device >= 80' string) to a dict."""
+    """Normalize an analogue entry (dict or 'device >= 80' string) to a dict.
+
+    A compact E2B-style mapping ``{device: ">= 80"}`` (a single-entry dict
+    without the schema's own ``device`` key) is rewritten to the shared
+    ``device ...`` text form so operator/threshold extraction stays in one
+    place.
+    """
+    if isinstance(item, dict) and "device" not in item and len(item) == 1:
+        (device, value), = item.items()
+        if value is not None:
+            item = f"{device}: {value}"
     if isinstance(item, dict):
         return item
     text = str(item).strip()
@@ -261,14 +281,23 @@ def _parse_analogue_entry(item: Any, device_names: set[str]) -> dict[str, Any]:
 
 
 def _parse_timer_entry(item: Any) -> dict[str, Any]:
-    """Normalize a timer entry (dict, '5s ...', or bare '5') to a dict."""
+    """Normalize a timer entry (dict, '5s ...', or bare '5') to a dict.
+
+    A compact single-entry mapping ``{description: duration}`` (without the
+    schema's own ``duration_seconds`` key) is rewritten to the shared
+    ``description: duration`` text form.
+    """
+    if isinstance(item, dict) and "duration_seconds" not in item and len(item) == 1:
+        (key, value), = item.items()
+        if value is not None:
+            item = f"{key}: {value}"
     if isinstance(item, dict):
         return item
     text = str(item).strip()
     match = _TIMER_RE.search(text)
     if match:
         duration = float(match.group(1))
-        description = (text[:match.start()] + " " + text[match.end():]).strip()
+        description = (text[:match.start()] + " " + text[match.end():]).strip(" :-\t")
     else:
         bare = re.fullmatch(r"(\d+(?:\.\d+)?)", text)
         if bare is None:
@@ -286,14 +315,24 @@ def _normalize_intent_args(
 ) -> dict[str, Any]:
     """Normalize backend-flattened tool args into schema-shaped structures.
 
-    Some backends flatten nested models in tool calls (for example returning
-    ``colour_states=['SL-301: green']`` instead of a list of objects). Python
-    owns the final structure: loose entries are parsed deterministically and
-    still pass through Pydantic validation and grounding checks.
+    Some backends flatten nested models in tool calls instead of returning
+    lists of objects; the loose shapes accepted per list field are:
+    - a single string, e.g. ``colour_states='SL-301: green'``
+    - a single dict, e.g. ``colour_states={'device': 'SL-301', 'colour': 'green'}``
+    - a compact keyed mapping, e.g. ``colour_states={'SL-301': 'green'}``
+      (keys are equipment/device names; seen from E2B-style backends)
+    Python owns the final structure: loose entries are parsed deterministically
+    and still pass through Pydantic validation and grounding checks.
+
+    Intents are graded by semantic load: analogue and timer entries are
+    code-bearing (they render to REAL comparisons and TON blocks), so any
+    parsing failure aborts the draft. Colour-state entries are
+    comment-bearing (they only feed review comments), so an unparseable
+    entry degrades to a state note instead of aborting; grounding failures
+    (no matching device) still abort.
     """
     normalized = dict(args)
     for key, parser in (
-        ("colour_states", lambda item: _parse_colour_entry(item, device_names)),
         ("analogue_conditions", lambda item: _parse_analogue_entry(item, device_names)),
         ("timers", _parse_timer_entry),
     ):
@@ -302,9 +341,41 @@ def _normalize_intent_args(
             continue
         if isinstance(items, str):
             items = [items]
+        elif isinstance(items, dict):
+            # Single loose entry returned as a mapping; the per-key parser
+            # normalizes it whether it is schema-shaped or a compact keyed
+            # mapping.
+            items = [items]
         if not isinstance(items, list):
             raise ValueError(f"Invalid {key} for {label}: {items!r}")
         normalized[key] = [parser(item) for item in items]
+
+    colour_items = normalized.get("colour_states")
+    if colour_items is not None:
+        if isinstance(colour_items, str):
+            colour_items = [colour_items]
+        elif isinstance(colour_items, dict):
+            colour_items = [colour_items]
+        if not isinstance(colour_items, list):
+            raise ValueError(f"Invalid colour_states for {label}: {colour_items!r}")
+        parsed_colours: list[dict[str, Any]] = []
+        degraded_notes: list[str] = []
+        for item in colour_items:
+            try:
+                parsed_colours.append(_parse_colour_entry(item, device_names))
+            except ValueError as exc:
+                if "no matching device prefix" in str(exc):
+                    raise  # grounding failure is never downgraded
+                degraded_notes.append(
+                    f"Unparseable colour-state entry {item!r} kept as a note: {exc}"
+                )
+        normalized["colour_states"] = parsed_colours
+        if degraded_notes:
+            notes = normalized.get("state_notes") or []
+            if isinstance(notes, str):
+                notes = [notes]
+            normalized["state_notes"] = [*notes, *degraded_notes]
+
     notes = normalized.get("state_notes")
     if isinstance(notes, str):
         normalized["state_notes"] = [notes]
@@ -365,7 +436,9 @@ assignment cannot represent: timers/delays, analogue threshold conditions,
 colour/state changes, or sequence-state notes. Return empty lists when the
 step is fully covered by a plain BOOL draft. Never invent devices:
 colour_states and analogue_conditions may only name equipment from the
-supplied list.
+supplied list. Every analogue_conditions entry MUST include a comparison
+operator (>=, <=, >, <, ==) and a bare numeric threshold without unit
+symbols (e.g. "tank level sensor >= 80").
 
 Step id: {step_id}
 Action: {action}
