@@ -919,6 +919,11 @@ colour/state intents as review notes — replacing the deterministic baseline's
 `src/plc_code_schemas.py` gained optional `operator`/`threshold` on
 `LDContact` and timer fields on `LDNetwork`; all default to `None`, keeping
 existing deterministic and LLM-direct outputs unchanged.
+Verified with `--backend local` (Gemma 4 E2B) on both example ASTs: IR
+structure identical to the API backend across all 10 networks. The E2S4T6
+local-backend hardening applies unchanged here because LD reuses
+`_collect_intents`, and it demonstrably fired: 6 unparseable colour-state
+entries from ILK-1/ILK-2 degraded to review notes instead of aborting.
 
 E2S4T3 adds `src/ld_ir_gen.py`, a deterministic AST-to-LD-IR generator. It
 outputs structured LD JSON under `data/plc/ld/*.json`. LD IR represents
@@ -974,6 +979,30 @@ one network per target coil. Current local outputs for `signal_light_demo` and
 `sample_control` passed validation and were saved, but local generation remains
 more model-dependent and should be reviewed carefully before downstream use.
 
+##### Cross-Approach Comparison
+
+Three generation approaches now coexist for both output types, compared below
+across approach, technical characteristics, implementation, and observed
+behaviour on the two example ASTs (`signal_light_demo` — 2 networks/simple
+BOOL logic; `sample_control` — 8 networks/timers + analogue + multi-target
+interlocks).
+
+| Approach | Technical characteristics | Implementation | `signal_light_demo` (ST / LD) | `sample_control` (ST / LD) |
+|---|---|---|---|---|
+| **Deterministic** (E2S4T2/T3) | No LLM, fully reproducible; correct within capability, but timers/analogue/colour cannot be rendered | Rule engine: AST traversal -> variable map -> template rendering (`st_gen.py` / `ld_ir_gen.py`); unsupported logic marked with `notes` / `TODO_UNSUPPORTED_CONDITION` | ST: 3 vars, 2 blocks, complete BOOL logic; LD: 2 networks, plain contacts | ST: 5 vars, BOOL-only draft, no timer/analogue logic; LD: 8 networks but 2 `TODO_UNSUPPORTED_CONDITION` placeholders (timer + analogue) |
+| **LLM Direct** (E2S4T4/T5) | LLM generates the final code/IR directly; no rendering middle layer; output quality depends on model discipline; not reproducible across backends | Single prompt -> full program -> Markdown-fence cleanup -> light structural checks (LD: JSON cleanup + validation retries); per-backend output suffixes | ST: api 1.1 KB / local 2.3 KB; local adds `ELSIF` + `= TRUE` style and free-form naming; LD: 2 networks, passes validation | ST: api 7 vars / local 9 vars (5.0 KB, most verbose); LD: 8 networks, multi-target interlocks split, but model-chosen naming (`DEV_` prefix) and network IDs (`ILK-1..4`) |
+| **Hybrid** (E2S4T6/T7) | Semantics from LLM, structure from Python: LLM returns structured intent only; language-agnostic intent pipeline shared by ST and LD | Per-item tool calls (`suggest_sequence_intent` / `suggest_interlock_intent`) -> arg normalization (str/list/compact dict) -> grounding checks -> deterministic rendering (TON blocks, REAL comparisons, colour notes); intent graded by semantic load (code-bearing aborts, comment-bearing degrades) | ST: 3 vars, 2 blocks, colour intents green/red as review notes; LD: 2 networks, colour notes; api/local structurally identical | ST: 6 vars, 5 IF blocks, REAL comparison + TON block rendered; LD: 8 networks, analogue contact `>= 80` + timer `5s` metadata; api/local structurally identical (10/10 networks); local-only: 1 (ST) / 6 (LD) degraded colour-state review notes from E2B |
+
+**Backend observations:** the `api` backend (Gemini `3.1-flash-lite`) is
+consistently stable and format-disciplined across all three approaches. The
+`local` backend (LM Studio, Gemma 4 E2B) delivers equal *semantic* quality but
+shows format drift: LLM Direct local output is markedly more verbose with
+free-form naming, while Hybrid local output reproduces the API structure
+exactly (see the E2S4T6 local-backend hardening note above). Direct outputs are
+comparison artifacts only; Hybrid is the recommended default because it keeps
+LLM capability (timers, analogue, colour) inside a deterministic, reviewable
+rendering pipeline.
+
 Next verification work moves to EPIC-3 `E3S1 - Output artifact verification`,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
 and OpenPLC Editor / Runtime validation exploration.
@@ -1007,7 +1036,7 @@ Python renders the final code deterministically.
 | E2S4T4 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
 | E2S4T5 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
 | E2S4T6 | Added `src/st_hybrid_schemas.py` (structured code-intent contracts) and `src/st_gen_hybrid.py`, a hybrid `PLC_AST` to Structured Text generator where the LLM supplies code intent (timers, analogue thresholds, colour states) via function calls and Python renders final ST deterministically (TON blocks, REAL comparisons), with grounding checks and backend-arg normalization; verified on both examples with the `api` and `local` (Gemma 4 E2B) backends, with local runs driving hardening (compact keyed-mapping normalization, colour-state degrade-to-note) plus `tests/test_st_hybrid_gen.py` |
-| E2S4T7 | Added `src/ld_ir_gen_hybrid.py`, a hybrid `PLC_AST` to LD IR generator reusing the E2S4T6 intent pipeline; extended `src/plc_code_schemas.py` with optional analogue-contact (`operator`/`threshold`) and timer-network fields; Python renders analogue contacts, timer metadata, and colour/state notes deterministically; verified on both examples with the `api` backend plus `tests/test_ld_ir_gen_hybrid.py` |
+| E2S4T7 | Added `src/ld_ir_gen_hybrid.py`, a hybrid `PLC_AST` to LD IR generator reusing the E2S4T6 intent pipeline; extended `src/plc_code_schemas.py` with optional analogue-contact (`operator`/`threshold`) and timer-network fields; Python renders analogue contacts, timer metadata, and colour/state notes deterministically; verified on both examples with the `api` and `local` (Gemma 4 E2B) backends — local runs confirmed the E2S4T6 hardening applies unchanged (6 unparseable colour-state entries degraded to notes) plus `tests/test_ld_ir_gen_hybrid.py` |
 
 ## 📜 Branch History
 
