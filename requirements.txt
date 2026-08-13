@@ -27,6 +27,7 @@ filelock==3.29.1
 filetype==1.2.0
 frozenlist==1.8.0
 fsspec==2026.4.0
+gherkin-official==41.0.0
 greenlet==3.5.1
 griffe==2.0.2
 griffecli==2.0.2
