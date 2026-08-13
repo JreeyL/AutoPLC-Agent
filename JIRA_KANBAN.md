@@ -106,14 +106,17 @@ Action items captured from supervisor's feedback during the interim presentation
   * Added validation-feedback retry handling for JSON parsing, LDProgram schema, or light-validation failures; local uses schema-guided JSON output.
   * Troubleshooting note: local Gemma E4B initially failed on the larger `sample_control` case due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
   * API and local backends generated both example LD Direct outputs, including `sample_control_api_AST_C_ld_llm_direct_local.json`.
-* **[E2S4T6] Add Hybrid Structured Text generator** — planned.
+* **[E2S4T6] Add Hybrid Structured Text generator** — complete.
   * Combines the deterministic baseline and LLM-direct approaches: the LLM converts complex actions (timers, analogue thresholds, sequence state, colour states) into structured code intent, and Python renders the final ST code deterministically.
   * Follows the E2S3 Approach C principle: the LLM provides semantic suggestions; Python owns rendering, validation, and traceability.
   * Keeps backend compatibility (`--backend local` / `--backend api`).
+  * Added `src/st_hybrid_schemas.py` (TimerIntent/ColourStateIntent/AnalogueIntent/SequenceCodeIntent/InterlockCodeIntent) and `src/st_gen_hybrid.py` with grounding checks, backend-arg normalization, TON rendering for timers, REAL comparisons for analogue conditions, and colour-state review comments.
+  * Verification: `py_compile`; `api` backend runs on both `signal_light_demo` and `sample_control` AST files (structure valid: PROGRAM/VAR/END_VAR/END_PROGRAM present, balanced IF/END_IF, no Markdown fences); `tests/test_st_hybrid_gen.py` (11 deterministic tests) and existing LD tests pass; `git diff --check` clean. `local` backend inference pending manual verification.
 * **[E2S4T7] Add Hybrid LD IR generator** — planned.
   * Same hybrid pattern as E2S4T6 applied to Ladder Diagram IR: the LLM supplies structured code intent for unsupported logic (timers, analogue/numeric comparisons, parallel branches), and Python renders validated LD IR JSON.
-* Graphical Ladder Diagram rendering, richer ST/LD coverage, PLCopen XML
-  mapping, timers, and vendor-specific export remain future tasks.
+* Graphical Ladder Diagram rendering, richer ST/LD coverage (enumerated
+  colour states, multi-step timers), PLCopen XML mapping, and vendor-specific
+  export remain future tasks.
 
 ### EPIC-3: Validation & Export
 
@@ -223,6 +226,10 @@ Action items captured from supervisor's feedback during the interim presentation
   * Known limitation: generated ST remains MVP draft output. MATIEC syntax checking, OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to EPIC-3 (E3S1 Output artifact verification) or later.
 * **[E2S4T5] Add LLM Direct LD IR generator**
   * E2S4T5 — Add LLM Direct LD IR generator: added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` AST-to-LD-IR JSON renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks.
+* **[E2S4T6] Add Hybrid Structured Text generator**
+  * E2S4T6 — Add Hybrid ST generator: added `src/st_hybrid_schemas.py` (structured code-intent contracts) and `src/st_gen_hybrid.py`. Per-item LLM tool calls (`suggest_sequence_intent` / `suggest_interlock_intent`) return structured code intent for complex logic; Python validates grounding against the AST device list and renders final ST deterministically: timers as TON function blocks (`TON_<step>_<n>` declared in VAR), analogue thresholds as REAL comparisons (measured device declared `REAL`), colour states and sequence-state notes as review comments.
+  * Backend-arg normalization: flattened tool args (e.g. `'SL-301: green'`, `'tank level sensor reaches 80'`, bare `'5'`) are parsed deterministically by Python before Pydantic validation, following the E2S3 Approach C principle that Python owns structure and grounding.
+  * Verification: `py_compile`; API runs on both example AST files — `signal_light_demo_api_AST_C_st_hybrid_api.st` (3 variables, 2 blocks; colour intents green/red captured) and `sample_control_api_AST_C_st_hybrid_api.st` (6 variables, 6 blocks; `tank_level_sensor : REAL`, `TON_4_1 : TON` with `PT := T#5s`) — with structural checks; `tests/test_st_hybrid_gen.py` (11 tests) and existing LD tests pass; `git diff --check` clean. Local backend inference skipped for manual verification.
   * Prompt refinement: sequence networks must appear before interlock networks despite higher logical safety priority; multi-target interlocks must split into one network per target coil; contact/coil variables must be IEC-compatible; unsupported timer/analogue/sequence-state logic must remain notes plus valid placeholder variables.
   * Retry handling: API gets one validation-feedback retry; local gets two validation-feedback retries and uses `json_schema` response format to keep larger LD IR JSON structurally valid.
   * Troubleshooting result: local Gemma E4B initially failed on `sample_control` due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
