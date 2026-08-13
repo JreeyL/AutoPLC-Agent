@@ -15,3 +15,8 @@ pycache/
 
 # Local and generated data
 data/
+# Local Pi runtime state
+.atl/
+
+# Pi agent instructions (local only, not synced)
+AGENTS.md

@@ -93,18 +93,12 @@ Action items captured from supervisor's feedback during the interim presentation
   * Supports basic controlled action-to-coil mapping: open/start/on/energize/activate/run to set coils, and close/stop/off/de-energize/deactivate/reset to reset coils; ambiguous or negated action text falls back to normal coils.
   * Represents only simple positive AND conditions as serial normally-open contacts; OR, negation, timer/duration, and analogue/numeric comparison conditions are marked with unsupported notes rather than silently approximated.
   * Verified both example LD IR files were generated successfully: 2 networks for `signal_light_demo_api_AST_C_ld.json` and 8 networks for `sample_control_api_AST_C_ld.json`.
-* **[E2S4T4] Output verification** — planned.
-  * Add pytest tests for generated `.st` file structure.
-  * Check required ST sections, variable declarations, traceability comments, and interlock override placement.
-  * Investigate MATIEC for IEC 61131-3 ST syntax / compile checking.
-  * Investigate OpenPLC Editor / Runtime for compiling and validating generated PLC logic.
-  * Keep runtime simulation and vendor-specific Siemens TIA Portal / PLCSIM validation as later-stage work.
-* **[E2S4T5] Add LLM Direct Structured Text generator** — complete.
+* **[E2S4T4] Add LLM Direct Structured Text generator** — complete.
   * Added `src/st_gen_llm_direct.py` as a separate `llm_direct` approach, not a replacement for deterministic `src/st_gen.py`.
   * Supports `--backend api` and `--backend local`, writing `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs for comparison.
   * Performs PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks before saving generated text.
   * Current comparison: deterministic Python ST is most stable and conservative; API LLM Direct output is cleaner and more conservative than local; local LLM Direct output is useful for cross-backend comparison but slower, more speculative, and less stable.
-* **[E2S4T6] Add LLM Direct LD IR generator** — complete.
+* **[E2S4T5] Add LLM Direct LD IR generator** — complete.
   * Added `src/ld_ir_gen_llm_direct.py` as a separate `llm_direct` approach, not a replacement for deterministic `src/ld_ir_gen.py`.
   * Supports `--backend api` and `--backend local`, writing `_ld_llm_direct_api.json` and `_ld_llm_direct_local.json` outputs where generation completes.
   * Performs PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks before saving generated JSON.
@@ -112,17 +106,40 @@ Action items captured from supervisor's feedback during the interim presentation
   * Added validation-feedback retry handling for JSON parsing, LDProgram schema, or light-validation failures; local uses schema-guided JSON output.
   * Troubleshooting note: local Gemma E4B initially failed on the larger `sample_control` case due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
   * API and local backends generated both example LD Direct outputs, including `sample_control_api_AST_C_ld_llm_direct_local.json`.
+* **[E2S4T6] Add Hybrid Structured Text generator** — planned.
+  * Combines the deterministic baseline and LLM-direct approaches: the LLM converts complex actions (timers, analogue thresholds, sequence state, colour states) into structured code intent, and Python renders the final ST code deterministically.
+  * Follows the E2S3 Approach C principle: the LLM provides semantic suggestions; Python owns rendering, validation, and traceability.
+  * Keeps backend compatibility (`--backend local` / `--backend api`).
+* **[E2S4T7] Add Hybrid LD IR generator** — planned.
+  * Same hybrid pattern as E2S4T6 applied to Ladder Diagram IR: the LLM supplies structured code intent for unsupported logic (timers, analogue/numeric comparisons, parallel branches), and Python renders validated LD IR JSON.
 * Graphical Ladder Diagram rendering, richer ST/LD coverage, PLCopen XML
   mapping, timers, and vendor-specific export remain future tasks.
 
 ### EPIC-3: Validation & Export
 
-#### E3S1: PLCopen XML export
-* **[E3S1T1]** Create export module to map the generated AST to interoperable PLCopen XML format.
+#### E3S1: Output artifact verification
+* **[E3S1T1] Add pytest structural checks for generated ST artifacts** — planned.
+  * Check required ST sections, variable declarations, traceability comments, and interlock override placement in generated `.st` files.
+* **[E3S1T2] Add pytest structural checks for generated LD IR artifacts** — planned.
+  * Check network structure, contact/coil types, unique network IDs, traceability, priority, and sequence-before-interlock ordering in generated LD IR JSON.
+* **[E3S1T3] Investigate MATIEC for IEC 61131-3 ST syntax / compile checking** — planned.
+* **[E3S1T4] Investigate OpenPLC Editor / Runtime for compiling and validating generated PLC logic** — planned.
+* **[E3S1T5] Extend the verification suite to hybrid generator outputs** — planned.
+  * Once the E2S4T6/E2S4T7 hybrid generators land, run the same structural and external-tool checks on their outputs.
+* **[E3S1T6] Evaluate runtime simulation and vendor-specific TIA Portal / PLCSIM validation** — planned (later-stage work).
 
-#### E3S2: Automated tests and validation workflows
-* **[E3S2T1]** Implement deterministic validation around LLM-generated content.
-* **[E3S2T2]** Add unit tests for parsers and generators.
+#### E3S2: PLCopen XML export
+* **[E3S2T1] Create export module mapping PLC_AST to interoperable PLCopen XML** — planned.
+* **[E3S2T2] Validate generated PLCopen XML** — planned.
+  * Check XML schema conformance, required element completeness, traceability preservation, and readability by standard PLC engineering tools.
+
+#### E3S3: Component tests and validation framework
+* **[E3S3T1] Consolidate deterministic grounding-check patterns into a reusable validation framework** — planned.
+  * Reuse and extend the grounding checks from E2S2 (Gherkin scenario grounding) and E2S3 Approach C (equipment/scenario grounding, authoritative field protection) as shared validation helpers.
+* **[E3S3T2] Add unit tests for parsers and generators** — planned.
+  * Cover `req_parser.py`, `gherkin_gen.py`, `ast_gen_A/B/C.py`, `st_gen.py`, `ld_ir_gen.py`, and the `llm_direct` wrappers.
+* **[E3S3T3] Add negative / failure-path test cases** — planned.
+  * From the interim feedback: ambiguous or incomplete requirements, contradictory interlock conditions, and inputs missing key equipment information; applies across the E2S1-E2S4 stages.
 
 ---
 
@@ -195,19 +212,19 @@ Action items captured from supervisor's feedback during the interim presentation
 * **[E2S4T2] Implement deterministic Structured Text generator**
   * E2S4T2 — Implement ST generator: added deterministic AST-to-ST renderer with sanitized variable names, BOOL declarations, sequence IF blocks, safety interlock override blocks, and traceability comments. Verified against signal_light_demo and sample_control AST outputs.
   * Known limitation: current ST output is a deterministic MVP draft. It does not yet model signal-light colour states, sequence state, timers, or analogue thresholds.
-  * Deferred: pytest structural checks, MATIEC syntax checking, and OpenPLC Editor / Runtime validation are planned under E2S4T4 Output Verification.
+  * Deferred: pytest structural checks, MATIEC syntax checking, and OpenPLC Editor / Runtime validation are planned under EPIC-3 E3S1 Output artifact verification.
 * **[E2S4T3] Implement LD IR generator**
   * E2S4T3 — Implement LD IR generator: added deterministic AST-to-LD-IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes. Verified against signal_light_demo and sample_control AST outputs.
   * Known limitation: current LD IR is a structural MVP, not graphical LD or PLCopen XML. It represents only simple positive AND conditions as serial normally-open contacts and does not yet support graphical layout, parallel branches, timers, analogue thresholds, runtime validation, or vendor-specific PLCopen XML export.
-* **[E2S4T5] Add LLM Direct Structured Text generator**
-  * E2S4T5 — Add LLM Direct ST generator: added `src/st_gen_llm_direct.py`, a separate `llm_direct` AST-to-ST renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks. Generated API and local comparison outputs for signal_light_demo and sample_control.
+* **[E2S4T4] Add LLM Direct Structured Text generator**
+  * E2S4T4 — Add LLM Direct ST generator: added `src/st_gen_llm_direct.py`, a separate `llm_direct` AST-to-ST renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, Markdown-fence cleanup, and light ST structure checks. Generated API and local comparison outputs for signal_light_demo and sample_control.
   * Comparison: deterministic Python ST remains the most reproducible baseline; API LLM Direct is the cleaner MVP LLM draft and follows sequence-before-safety ordering more closely; local LLM Direct is slower and more speculative, with higher syntax/semantic risk.
   * Verification recorded: `py_compile`, both API runs, both local runs, and `git diff --check` completed during implementation; `git diff --check` reported line-ending warnings only.
-  * Known limitation: generated ST remains MVP draft output. MATIEC syntax checking, OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to E2S4T4 or later.
-* **[E2S4T6] Add LLM Direct LD IR generator**
-  * E2S4T6 — Add LLM Direct LD IR generator: added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` AST-to-LD-IR JSON renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks.
+  * Known limitation: generated ST remains MVP draft output. MATIEC syntax checking, OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to EPIC-3 (E3S1 Output artifact verification) or later.
+* **[E2S4T5] Add LLM Direct LD IR generator**
+  * E2S4T5 — Add LLM Direct LD IR generator: added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` AST-to-LD-IR JSON renderer with local/API backend support, backend-specific output suffixes, PLC_AST input validation, JSON cleanup/parsing, LDProgram schema validation, and light LD structure checks.
   * Prompt refinement: sequence networks must appear before interlock networks despite higher logical safety priority; multi-target interlocks must split into one network per target coil; contact/coil variables must be IEC-compatible; unsupported timer/analogue/sequence-state logic must remain notes plus valid placeholder variables.
   * Retry handling: API gets one validation-feedback retry; local gets two validation-feedback retries and uses `json_schema` response format to keep larger LD IR JSON structurally valid.
   * Troubleshooting result: local Gemma E4B initially failed on `sample_control` due to ordering, variable naming, and weak interlock coil issues; prompt hardening plus retry feedback now saves an 8-network valid JSON artifact.
   * Verification recorded: `py_compile`, both API runs, both local runs, existing LD IR unit tests, and `git diff --check` completed. API and local backends generated `signal_light_demo` and `sample_control` LD Direct outputs.
-  * Known limitation: generated LD IR remains MVP draft output. API output is useful for comparison, while local output remains more model-dependent; graphical LD, PLCopen XML, MATIEC/OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to E2S4T4 or later.
+  * Known limitation: generated LD IR remains MVP draft output. API output is useful for comparison, while local output remains more model-dependent; graphical LD, PLCopen XML, MATIEC/OpenPLC validation, runtime simulation, and vendor-specific validation remain deferred to EPIC-3 (E3S1 Output artifact verification) or later.

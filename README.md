@@ -852,8 +852,8 @@ limitation for local verification.
 - [x] **E2S4T1 - Define ST/LD output contracts**
 - [x] **E2S4T2 - Implement deterministic Structured Text generator**
 - [x] **E2S4T3 - Implement LD IR generator**
-- [x] **E2S4T5 - Add LLM Direct Structured Text generator**
-- [x] **E2S4T6 - Add LLM Direct LD IR generator**
+- [x] **E2S4T4 - Add LLM Direct Structured Text generator**
+- [x] **E2S4T5 - Add LLM Direct LD IR generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
@@ -863,7 +863,7 @@ It renders BOOL declarations, sequence `IF` blocks, interlock override blocks,
 and traceability comments, with output written to `data/plc/st/*.st`.
 Generated ST is a draft and requires engineer review.
 
-E2S4T5 adds `src/st_gen_llm_direct.py`, a separate `llm_direct` ST generation
+E2S4T4 adds `src/st_gen_llm_direct.py`, a separate `llm_direct` ST generation
 approach. It validates `PLC_AST` input, asks the selected backend to directly
 produce plain Structured Text, performs light structural checks, and writes
 backend-specific outputs using `_st_llm_direct_api.st` or
@@ -890,7 +890,7 @@ The current regenerated LD IR examples are:
 before safety interlock networks. Multi-target interlocks are split into one
 coil per network.
 
-E2S4T6 adds `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` LD IR
+E2S4T5 adds `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` LD IR
 generation approach. It validates `PLC_AST` input, asks the selected backend to
 directly produce LD IR JSON, validates the result against `LDProgram`, performs
 light structural checks, and writes backend-specific outputs using
@@ -926,9 +926,16 @@ one network per target coil. Current local outputs for `signal_light_demo` and
 `sample_control` passed validation and were saved, but local generation remains
 more model-dependent and should be reviewed carefully before downstream use.
 
-Next verification work will be handled under E2S4T4 Output Verification,
+Next verification work moves to EPIC-3 `E3S1 - Output artifact verification`,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
 and OpenPLC Editor / Runtime validation exploration.
+
+Planned E2S4 follow-up adds hybrid generators that combine the deterministic
+baseline and LLM-direct approaches: the LLM converts complex actions (timers,
+analogue thresholds, sequence state, colour states) into structured code
+intent, and Python renders the final code deterministically
+(`E2S4T6 - Hybrid Structured Text generator` and
+`E2S4T7 - Hybrid LD IR generator`).
 
 ## 👥 Contributors
 
@@ -951,8 +958,8 @@ and OpenPLC Editor / Runtime validation exploration.
 | E2S4T1 | Defined lightweight Pydantic output contracts for Structured Text blocks and Ladder Diagram intermediate networks in `src/plc_code_schemas.py`; generation logic deferred |
 | E2S4T2 | Added `src/st_gen.py`, a deterministic `PLC_AST` to Structured Text draft renderer with sanitized variable names, BOOL declarations, sequence `IF` blocks, safety interlock overrides, and traceability comments; verified against `signal_light_demo` and `sample_control` AST outputs |
 | E2S4T3 | Added `src/ld_ir_gen.py`, a deterministic `PLC_AST` to LD IR renderer with sanitized variable names, controlled action-to-coil mapping, sequence networks, safety interlock networks, contacts, coils, priority, traceability links, and unsupported-condition notes; verified against `signal_light_demo` and `sample_control` AST outputs |
-| E2S4T5 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
-| E2S4T6 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
+| E2S4T4 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
+| E2S4T5 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
 
 ## 📜 Branch History
 
@@ -997,10 +1004,10 @@ and OpenPLC Editor / Runtime validation exploration.
 - **feature/epic2-agent** (`E2S4T3`): `src/ld_ir_gen.py` deterministic
   `PLC_AST` to LD IR JSON generation, writing review-required structured
   outputs to `data/plc/ld/`.
-- **feature/epic2-agent** (`E2S4T5`): `src/st_gen_llm_direct.py` separate
+- **feature/epic2-agent** (`E2S4T4`): `src/st_gen_llm_direct.py` separate
   `llm_direct` ST draft generation for local/API backend comparison, writing
   `_st_llm_direct_api.st` and `_st_llm_direct_local.st` outputs.
-- **feature/epic2-agent** (`E2S4T6`): `src/ld_ir_gen_llm_direct.py` separate
+- **feature/epic2-agent** (`E2S4T5`): `src/ld_ir_gen_llm_direct.py` separate
   `llm_direct` LD IR JSON generation for backend comparison, writing
   `_ld_llm_direct_api.json` and `_ld_llm_direct_local.json` outputs where
   generation completes.
