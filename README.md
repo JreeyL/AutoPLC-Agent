@@ -5,40 +5,19 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has
-> deterministic MVP Structured Text and Ladder Diagram IR generators, plus
-> separate `llm_direct` and hybrid Structured Text / LD IR generation
-> approaches for backend comparison (`src/st_gen_hybrid.py` and
-> `src/ld_ir_gen_hybrid.py` render LLM-suggested timers, analogue
-> thresholds, and colour states deterministically).
-> `E2S3 - AST/JSON intermediate representation` is complete across three
-> candidate approaches (A, B, and C).
-> `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
-> and a Gherkin `.feature` file (E2S2 output) into a single `PLC_AST` JSON under
-> `data/ast/` via a single LLM ``with_structured_output`` call.
-> `src/ast_gen_B.py` provides a fully deterministic, zero-LLM alternative that
-> builds the same ``PLC_AST`` structure using the ``gherkin-official`` library
-> and rule-based text matching, writing to ``data/ast/<stem>_AST_B.json``.
-> `src/ast_gen_C.py` provides an RPC/function-calling alternative: the LLM
-> selects structured semantic mappings for deterministic AST builder functions,
-> while Python owns assembly, validation, grounding, and provenance.
-> Together they establish the first complete requirement→scenario→AST
-> traceability chain through two independent generation strategies.
-> This builds on the complete `E2S2 - BDD/Gherkin generation` stage, where
-> `src/gherkin_gen.py` converts a parsed `SystemRequirement` JSON file into a
-> standard Gherkin `.feature` file, turning each control-sequence step and each
-> interlock into its own `Given/When/Then` scenario, and the complete
-> `E2S1 - Natural-language requirement ingestion` stage, where
-> `src/req_parser.py` extracts equipment, control sequences, and safety
-> interlocks from free-form requirements into a validated `SystemRequirement`
-> JSON schema. Two parallel RAG prototypes over a Siemens manual (LlamaIndex and
-> LangChain) remain in place. E2S4 ST/LD output contracts are defined, and
-> `src/st_gen.py` now renders deterministic MVP Structured Text drafts from
-> validated `PLC_AST` JSON, `src/st_gen_llm_direct.py` asks an LLM to directly
-> draft Structured Text with backend-specific output suffixes, `src/ld_ir_gen.py`
-> writes structured LD IR JSON to `data/plc/ld/*.json`, and
-> `src/ld_ir_gen_llm_direct.py` asks an LLM to directly draft LD IR JSON for
-> backend comparison.
+> **Project status:** `E2S1 - E2S4` of the core pipeline are complete:
+> natural-language requirements are parsed into `SystemRequirement` JSON
+> (`src/req_parser.py`), converted to Gherkin `.feature` files
+> (`src/gherkin_gen.py`), assembled into validated `PLC_AST` JSON through three
+> approaches A/B/C (`src/ast_gen_A/B/C.py`), and rendered to IEC 61131-3
+> Structured Text and Ladder Diagram IR drafts by three generation strategies
+> — deterministic (`st_gen.py`, `ld_ir_gen.py`), LLM Direct
+> (`st_gen_llm_direct.py`, `ld_ir_gen_llm_direct.py`), and hybrid
+> (`st_gen_hybrid.py`, `ld_ir_gen_hybrid.py`), the last two verified on both
+> the `api` and `local` (Gemma 4 E2B) backends. Two parallel RAG prototypes over
+> a Siemens manual (LlamaIndex and LangChain) remain in place. Remaining work is
+> tracked under `EPIC-3` in `JIRA_KANBAN.md`: output-artifact verification,
+> PLCopen XML export, and component-test consolidation.
 
 ## Table of Contents
 
@@ -60,15 +39,22 @@ natural language and end with vendor tools, PLC code, and machine-specific
 configuration. AutoPLC Agent is designed to make the steps between those points
 more structured, traceable, and suitable for human review.
 
-The intended platform uses large language models (LLMs) to:
+The implemented pipeline uses large language models (LLMs) at the parsing,
+Gherkin, AST, and code-drafting stages, with deterministic Python validation
+and rendering at every step:
 
-1. Interpret natural-language automation requirements.
-2. Express expected behavior as BDD scenarios using Gherkin syntax.
-3. Convert validated scenarios into a structured AST/JSON intermediate
-   representation.
-4. Generate standard IEC 61131-3 code, initially Structured Text (ST) and
-   Ladder Diagram (LD).
-5. Export interoperable PLCopen XML for downstream engineering tools.
+1. **Parse** natural-language automation requirements into a validated
+   `SystemRequirement` JSON (E2S1, `src/req_parser.py`).
+2. **Express** expected behavior as BDD scenarios in Gherkin `.feature` syntax
+   (E2S2, `src/gherkin_gen.py`).
+3. **Assemble** validated scenarios into a structured `PLC_AST` JSON
+   intermediate representation (E2S3, three approaches in
+   `src/ast_gen_A/B/C.py`).
+4. **Generate** standard IEC 61131-3 drafts — Structured Text (ST) and Ladder
+   Diagram (LD) IR — via deterministic, LLM Direct, and hybrid generators
+   (E2S4).
+5. **Export** interoperable PLCopen XML for downstream engineering tools
+   (planned, EPIC-3 E3S2).
 
 The platform is intended to assist engineers, not replace safety review,
 simulation, commissioning, or compliance processes. Generated control logic
@@ -80,58 +66,22 @@ The following capabilities define the planned product scope:
 
 - **Natural-language requirements intake** for describing control sequences,
   equipment behavior, alarms, interlocks, and operating modes.
+
 - **BDD requirement generation** using Gherkin `Feature`, `Scenario`,
   `Given`, `When`, and `Then` constructs.
+
 - **Traceable intermediate representation** using AST/JSON to connect source
   requirements, scenarios, code blocks, variables, and generated outputs.
+
 - **IEC 61131-3 code generation** targeting Structured Text and Ladder Diagram.
-- **ST/LD output contracts** (`src/plc_code_schemas.py`) for future
-  IEC 61131-3 Structured Text and Ladder Diagram generation.
-- **Deterministic Structured Text draft generation** (`src/st_gen.py`) from
-  validated `PLC_AST` JSON, producing BOOL declarations, sequence `IF` blocks,
-  safety interlock override blocks, and traceability comments under
-  `data/plc/st/*.st`.
-- **LLM Direct Structured Text draft generation** (`src/st_gen_llm_direct.py`)
-  from validated `PLC_AST` JSON, producing backend-specific comparison outputs
-  with `_st_llm_direct_api.st` and `_st_llm_direct_local.st` suffixes.
-- **Hybrid Structured Text draft generation** (`src/st_gen_hybrid.py`) from
-  validated `PLC_AST` JSON: the LLM returns structured code intent for complex
-  logic (timers, analogue thresholds, colour states) through function calls and
-  Python renders the final Structured Text deterministically, including TON
-  function-block calls and REAL comparisons, writing `_st_hybrid_api.st` and
-  `_st_hybrid_local.st` outputs.
-- **Hybrid Ladder Diagram IR draft generation** (`src/ld_ir_gen_hybrid.py`)
-  from validated `PLC_AST` JSON: the LLM supplies structured code intent and
-  Python renders the LD IR deterministically, producing analogue comparison
-  contacts (`operator`/`threshold` fields), network-level timer metadata, and
-  colour-state review notes, writing `_ld_hybrid_api.json` and
-  `_ld_hybrid_local.json` outputs.
-- **LLM Direct Ladder Diagram IR draft generation**
-  (`src/ld_ir_gen_llm_direct.py`) from validated `PLC_AST` JSON, producing
-  backend-specific comparison outputs with `_ld_llm_direct_api.json` and
-  `_ld_llm_direct_local.json` suffixes where the backend completes.
-- **PLCopen XML export** for exchanging generated program structures with
-  compatible PLC engineering environments.
-- **Validation-oriented workflow** that keeps generated artifacts inspectable
-  and supports future linting, simulation, and human approval gates.
-- **Notebook workspace** for experimentation, prompt evaluation, and prototype
-  development.
-- **Local LM Studio connectivity test** that discovers the Windows host from
-  the WSL default gateway and verifies an OpenAI-compatible chat completion.
-- **Local Weaviate vector database** deployed through Docker Compose with
-  persistent storage and REST/gRPC access.
-- **Prototype RAG pipeline (LlamaIndex)** using LlamaIndex to ingest
-  `data/siemens_manual.txt`, store HuggingFace embeddings in Weaviate, query
-  the `SiemensManual` vector index, and answer through LM Studio.
-- **Prototype RAG pipeline (LangChain)** using LangChain to ingest the same
-  manual into a separate `LangChainSiemens` Weaviate index and query it through
-  LM Studio, enabling a direct framework comparison.
+
 - **Natural-language requirement parser** (`src/req_parser.py`) that extracts
   equipment, control sequences, and safety interlocks from a free-form `.txt`
   requirement into a validated `SystemRequirement` Pydantic schema, using
   LangChain `with_structured_output` against either a local LM Studio
   (`--backend local`) or a Gemini cloud (`--backend api`) backend, writing the
   result to a backend-tagged `data/parsed/<name>_parsed_<backend>.json` file.
+
 - **Gherkin generation pipeline** (`src/gherkin_gen.py`) that converts a parsed
   `SystemRequirement` JSON file into a standard Gherkin `.feature` file. It maps
   each `ControlSequence` step and each `Interlock` into its own
@@ -141,12 +91,14 @@ The following capabilities define the planned product scope:
   then formats the assembled `GherkinFeature` into syntactically correct
   `Given/When/Then` output, written to a backend-tagged
   `data/gherkin/<name>_<backend>.feature` file.
+
 - **AST generation pipeline — Approach A (LLM direct)** (`src/ast_gen_A.py`)
   that reads a `SystemRequirement` JSON file (E2S1 output) and a Gherkin
   `.feature` file (E2S2 output) and produces a `PLC_AST` JSON file under
   `data/ast/` via a single LLM ``with_structured_output`` call. It reuses the
   `--backend {local,api}` flag from `req_parser.py` and writes to a
   backend-tagged `data/ast/<stem>_<backend>.json` file.
+
 - **AST generation pipeline — Approach B (deterministic)** (`src/ast_gen_B.py`)
   that builds the same `PLC_AST` structure using the ``gherkin-official``
   library to parse the `.feature` file and pure-Python text matching to
@@ -154,6 +106,7 @@ The following capabilities define the planned product scope:
   involvement**. It accepts two positional arguments (`req_file`,
   `feature_file`) with no `--backend` flag and writes to
   `data/ast/<stem>_AST_B.json`.
+
 - **AST generation pipeline — Approach C (RPC/function calling)**
   (`src/ast_gen_C.py`, with builders in `src/ast_builders.py`) that binds the
   LLM to per-item builder tools. Device nodes, verbatim source fields, IDs,
@@ -162,32 +115,98 @@ The following capabilities define the planned product scope:
   <feature.feature> --backend {local,api}`; output is
   `data/ast/<stem>_<backend>_AST_C.json`.
 
+- **ST/LD output contracts** (`src/plc_code_schemas.py`) defining the
+  `STProgram`/`STBlock` and `LDProgram`/`LDNetwork`/`LDContact`/`LDCoil`
+  structures consumed by the ST and LD generators.
+
+- **Deterministic Structured Text draft generation** (`src/st_gen.py`) from
+  validated `PLC_AST` JSON, producing BOOL declarations, sequence `IF` blocks,
+  safety interlock override blocks, and traceability comments under
+  `data/plc/st/*.st`.
+
+- **LLM Direct Structured Text draft generation** (`src/st_gen_llm_direct.py`)
+  from validated `PLC_AST` JSON, producing backend-specific comparison outputs
+  with `_st_llm_direct_api.st` and `_st_llm_direct_local.st` suffixes.
+
+- **Hybrid Structured Text draft generation** (`src/st_gen_hybrid.py`) from
+  validated `PLC_AST` JSON: the LLM returns structured code intent for complex
+  logic (timers, analogue thresholds, colour states) through function calls and
+  Python renders the final Structured Text deterministically, including TON
+  function-block calls and REAL comparisons, writing `_st_hybrid_api.st` and
+  `_st_hybrid_local.st` outputs.
+
+- **Deterministic Ladder Diagram IR draft generation** (`src/ld_ir_gen.py`)
+  from validated `PLC_AST` JSON, producing network-based LD IR JSON (contacts,
+  coils, priority, traceability links) under `data/plc/ld/*.json`.
+
+- **LLM Direct Ladder Diagram IR draft generation**
+  (`src/ld_ir_gen_llm_direct.py`) from validated `PLC_AST` JSON, producing
+  backend-specific comparison outputs with `_ld_llm_direct_api.json` and
+  `_ld_llm_direct_local.json` suffixes where the backend completes.
+
+- **Hybrid Ladder Diagram IR draft generation** (`src/ld_ir_gen_hybrid.py`)
+  from validated `PLC_AST` JSON: the LLM supplies structured code intent and
+  Python renders the LD IR deterministically, producing analogue comparison
+  contacts (`operator`/`threshold` fields), network-level timer metadata, and
+  colour-state review notes, writing `_ld_hybrid_api.json` and
+  `_ld_hybrid_local.json` outputs.
+
+- **PLCopen XML export** (planned, EPIC-3 E3S2) for exchanging generated
+  program structures with compatible PLC engineering environments.
+
+- **Validation-oriented workflow** that keeps generated artifacts inspectable
+  and supports future linting, simulation, and human approval gates.
+
+- **Local LM Studio connectivity test** that discovers the Windows host from
+  the WSL default gateway and verifies an OpenAI-compatible chat completion.
+
+- **Local Weaviate vector database** deployed through Docker Compose with
+  persistent storage and REST/gRPC access.
+
+- **Prototype RAG pipeline (LlamaIndex)** using LlamaIndex to ingest
+  `data/siemens_manual.txt`, store HuggingFace embeddings in Weaviate, query
+  the `SiemensManual` vector index, and answer through LM Studio.
+
+- **Prototype RAG pipeline (LangChain)** using LangChain to ingest the same
+  manual into a separate `LangChainSiemens` Weaviate index and query it through
+  LM Studio, enabling a direct framework comparison.
+
+- **Notebook workspace** for experimentation, prompt evaluation, and prototype
+  development.
+
 ## 🧭 Workflow and Architecture
 
-The planned artifact pipeline is:
+The implemented artifact pipeline is:
 
 ```text
-Natural-Language Requirement
+Natural-Language Requirement (.txt)
             |
             v
-    BDD / Gherkin Scenarios
+  Parsed SystemRequirement JSON      (src/req_parser.py)
             |
             v
-      AST / JSON Model
+   BDD / Gherkin Scenarios (.feature)  (src/gherkin_gen.py)
+            |
+            v
+        PLC_AST JSON                  (src/ast_gen_A/B/C.py)
             |
             +------------------+
             |                  |
             v                  v
- IEC 61131-3 ST / LD      PLCopen XML
+  IEC 61131-3 ST / LD IR    PLCopen XML (planned, E3S2)
             |                  |
             +--------+---------+
                      v
-          Engineer Review and Validation
+       Engineer Review and Validation
 ```
 
-The AST/JSON representation is the central contract in this design. It should
-allow each generated output to be traced back to an explicit requirement and
-make it possible to add deterministic validation around LLM-generated content.
+Each stage produces a validated, backend-tagged artifact under `data/`
+(`parsed/` -> `gherkin/` -> `ast/` -> `plc/st` and `plc/ld`). The `PLC_AST`
+representation is the central contract in this design: it allows every
+generated output to be traced back to an explicit requirement and makes it
+possible to add deterministic validation around LLM-generated content. Each
+downstream generator (`st_gen*`, `ld_ir_gen*`) consumes the validated `PLC_AST`
+directly, so no stage re-reads free-form text.
 
 ## 🚀 Getting Started
 
@@ -233,9 +252,9 @@ The requirement parser also accepts a `--backend {local,api}` argument,
 defaulting to `local` (LM Studio). The `api` backend is intended for demo
 scenarios where local inference is too slow:
 
-- `api` calls `gemini-2.5-flash` through Google's OpenAI-compatible endpoint
+- `api` calls `gemini-3.1-flash-lite` through Google's OpenAI-compatible endpoint
   (`https://generativelanguage.googleapis.com/v1beta/openai/`) and requires the
-  `GEMINI_API_KEY` environment variable. The Gemini 2.5 series supports
+  `GEMINI_API_KEY` environment variable. The Gemini 3.1 series supports
   `response_format` `json_schema` natively, so this backend uses the same
   default `with_structured_output(SystemRequirement)` binding as the local
   backend with no extra prompt engineering.
@@ -385,46 +404,24 @@ sequence `IF` blocks, safety interlock override blocks, and traceability
 comments, then writes `.st` files to `data/plc/st/`. Generated ST is a draft
 and requires engineer review before any PLC use.
 
-To compare LLM-direct ST generation against the deterministic Python renderer,
-run:
+Two additional approaches exist for comparison (see
+[Task Completion Status](#-task-completion-status) for details and
+verification records):
 
 ```bash
+# LLM Direct ST (backend comparison)
 python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend api
 python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend local
-python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend api
-python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend local
+
+# Hybrid ST (LLM suggests intent, Python renders deterministically)
+python -m src.st_gen_hybrid data/ast/signal_light_demo_api_AST_C.json --backend api
+python -m src.st_gen_hybrid data/ast/signal_light_demo_api_AST_C.json --backend local
 ```
 
-LLM Direct outputs are written beside the deterministic ST files using
-backend-specific suffixes: `_st_llm_direct_api.st` and
-`_st_llm_direct_local.st`. The wrapper validates the input with `PLC_AST`,
-constructs the prompt, calls the selected backend, strips accidental Markdown
-fences, checks for basic ST structure (`PROGRAM`, `VAR`, `END_VAR`,
-`END_PROGRAM`, and executable-looking `IF` / `END_IF` counts), and writes the
-file only if those checks pass. MATIEC/OpenPLC/runtime validation is not
-performed yet.
-
-Current ST generation comparison:
-
-| Generator | Output suffix | Current behavior |
-| --- | --- | --- |
-| Deterministic Python (`src/st_gen.py`) | `<stem>.st` | Most stable and reproducible. Keeps traceability and uses conservative TODO comments where logic is unsupported. Does not yet model signal-light colour states, sequence state, timers, or analogue thresholds. |
-| LLM Direct API (`src/st_gen_llm_direct.py --backend api`) | `<stem>_st_llm_direct_api.st` | Cleaner LLM Direct MVP draft in the current examples. Generally follows sequence-before-safety ordering and uses TODO comments for unsupported timer, analogue, colour-state, and complex logic. |
-| LLM Direct local (`src/st_gen_llm_direct.py --backend local`) | `<stem>_st_llm_direct_local.st` | Useful cross-backend comparison artifact, but slower and more speculative. Current outputs attempt richer state/timer structure and show higher syntax or semantic risk; do not treat as validated PLC code. |
-
-Implementation verification for LLM Direct ST was run with:
-
-```bash
-python -m py_compile src/st_gen_llm_direct.py
-python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend api
-python -m src.st_gen_llm_direct data/ast/signal_light_demo_api_AST_C.json --backend local
-python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend api
-python -m src.st_gen_llm_direct data/ast/sample_control_api_AST_C.json --backend local
-git diff --check
-```
-
-Both API and local backend outputs were generated for the two current example
-AST files. `git diff --check` passed with line-ending warnings only.
+LLM Direct outputs use `_st_llm_direct_api.st` / `_st_llm_direct_local.st`
+suffixes; hybrid outputs use `_st_hybrid_api.st` / `_st_hybrid_local.st`. All
+generated ST is a draft and requires engineer review before any PLC use.
+MATIEC/OpenPLC/runtime validation is not performed yet.
 
 ### Run the Ladder Diagram IR Generators
 
@@ -447,65 +444,66 @@ python -m src.ld_ir_gen_llm_direct data/ast/sample_control_api_AST_C.json --back
 ```
 
 LLM Direct LD IR outputs use `_ld_llm_direct_api.json` and
-`_ld_llm_direct_local.json` suffixes. The wrapper validates the input with
-`PLC_AST`, asks the selected backend for plain JSON, strips accidental Markdown
-fences, parses JSON, validates against `LDProgram`, checks unique network IDs,
-required coils, allowed contact/coil types, traceability, and sequence-before-
-interlock ordering, then writes only validated JSON. The LLM Direct LD prompt
-now explicitly separates sequence-first JSON array ordering from safety logical
-priority, requires one network per target coil for multi-target interlocks,
-requires IEC-compatible variable names, and keeps unsupported timer/analogue/
-sequence-state logic as TODO notes with structurally valid placeholder
-variables. Local generation uses schema-guided JSON output, allows two
-validation-feedback retries, and writes the file only after validation passes.
+`_ld_llm_direct_local.json` suffixes; the wrapper validates the output against
+`LDProgram` (unique network IDs, required coils, allowed contact/coil types,
+traceability, sequence-before-interlock ordering) and writes only validated
+JSON, with validation-feedback retries for the local backend.
 
-Current API and local runs generated both example outputs successfully,
-including `sample_control_api_AST_C_ld_llm_direct_local.json`.
+The hybrid LD IR generator reuses the hybrid ST intent pipeline:
 
-Troubleshooting note: the local Gemma E4B backend initially failed on the
-larger `sample_control` case because it placed interlocks before sequence
-networks, emitted invalid variable names such as percent-bearing identifiers,
-and used weak marker coils instead of direct target reset coils. Prompt
-hardening plus validation-feedback retry now saves an 8-network valid JSON
-artifact for local `sample_control`. API output remains more stable and
-traceable; local output is usable for comparison but still model-dependent.
+```bash
+# Hybrid LD IR (LLM suggests intent, Python renders deterministically)
+python -m src.ld_ir_gen_hybrid data/ast/signal_light_demo_api_AST_C.json --backend api
+python -m src.ld_ir_gen_hybrid data/ast/signal_light_demo_api_AST_C.json --backend local
+```
+
+Hybrid outputs use `_ld_hybrid_api.json` / `_ld_hybrid_local.json` suffixes and
+pass the same `validate_ld_structure` checks as the deterministic baseline.
+See [Task Completion Status](#-task-completion-status) for verification records
+and troubleshooting notes.
 
 ## 📦 Project Structure
 
 ```text
 AutoPLC-Agent/
-├── .agents/          # Local agent configuration
-├── .codex/           # Local Codex configuration
 ├── data/
 │   ├── requirements/ # Input natural-language requirement .txt files
 │   ├── parsed/       # Structured SystemRequirement JSON output
 │   ├── gherkin/      # Generated Gherkin .feature output
 │   ├── ast/          # Generated PLC_AST JSON output
-│   ├── plc/st/       # Generated Structured Text draft output
+│   ├── plc/
+│   │   ├── st/       # Generated Structured Text draft output
+│   │   └── ld/       # Generated Ladder Diagram IR JSON output
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
-│   ├── ast_builders.py    # Deterministic AST builder helpers for Approach C
-│   ├── ast_gen_A.py       # LLM-direct SystemRequirement + Gherkin to PLC_AST
-│   ├── ast_gen_B.py       # Deterministic SystemRequirement + Gherkin to PLC_AST
-│   ├── ast_gen_C.py       # RPC/function-calling SystemRequirement + Gherkin to PLC_AST
-│   ├── ast_schemas.py     # Pydantic PLC_AST schemas
-│   ├── gherkin_gen.py     # SystemRequirement JSON to Gherkin .feature generator
-│   ├── gherkin_schemas.py # Pydantic GherkinScenario/GherkinFeature schemas
-│   ├── ingest.py     # LlamaIndex ingestion into Weaviate (SiemensManual index)
-│   ├── lc_ingest.py  # LangChain ingestion into Weaviate (LangChainSiemens index)
-│   ├── lc_query.py   # LangChain RAG query over Weaviate and LM Studio
-│   ├── plc_code_schemas.py # Pydantic ST/LD output contracts
-│   ├── query.py      # LlamaIndex RAG query over Weaviate and LM Studio
-│   ├── req_parser.py # Natural-language requirement parser to structured JSON
-│   ├── schemas.py    # Pydantic SystemRequirement structured-output schemas
+│   ├── ast_builders.py      # Deterministic AST builder helpers for Approach C
+│   ├── ast_gen_A.py         # LLM-direct SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_gen_B.py         # Deterministic SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_gen_C.py         # RPC/function-calling SystemRequirement + Gherkin to PLC_AST
+│   ├── ast_schemas.py       # Pydantic PLC_AST schemas
+│   ├── gherkin_gen.py       # SystemRequirement JSON to Gherkin .feature generator
+│   ├── gherkin_schemas.py   # Pydantic GherkinScenario/GherkinFeature schemas
+│   ├── ingest.py            # LlamaIndex ingestion into Weaviate (SiemensManual index)
+│   ├── lc_ingest.py         # LangChain ingestion into Weaviate (LangChainSiemens index)
+│   ├── lc_query.py          # LangChain RAG query over Weaviate and LM Studio
+│   ├── ld_ir_gen.py         # Deterministic PLC_AST to LD IR JSON generator
+│   ├── ld_ir_gen_hybrid.py  # Hybrid PLC_AST to LD IR JSON generator
 │   ├── ld_ir_gen_llm_direct.py # LLM-direct PLC_AST to LD IR JSON generator
-│   ├── st_gen.py     # Deterministic PLC_AST to Structured Text draft generator
+│   ├── plc_code_schemas.py  # Pydantic ST/LD output contracts
+│   ├── query.py             # LlamaIndex RAG query over Weaviate and LM Studio
+│   ├── req_parser.py        # Natural-language requirement parser to structured JSON
+│   ├── schemas.py           # Pydantic SystemRequirement structured-output schemas
+│   ├── st_gen.py            # Deterministic PLC_AST to Structured Text draft generator
+│   ├── st_gen_hybrid.py     # Hybrid PLC_AST to Structured Text draft generator
 │   ├── st_gen_llm_direct.py # LLM-direct PLC_AST to Structured Text draft generator
-│   └── test_llm.py   # WSL-to-LM Studio API connectivity test
+│   ├── st_hybrid_schemas.py # Pydantic hybrid code-intent schemas
+│   └── test_llm.py          # WSL-to-LM Studio API connectivity test
+├── tests/            # unittest suites for the ST/LD generators
 ├── .gitignore        # Repository ignore rules
 ├── docker-compose.yml # Local Weaviate service definition
 ├── JIRA_KANBAN.md    # Jira-style Epic, Story, and Task tracker
+├── LICENSE           # MIT license
 ├── README.md         # Project overview and development record
 └── requirements.txt  # Python dependencies
 ```
@@ -520,7 +518,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | --- | --- | --- |
 | Runtime | Python 3.10+ | In use |
 | Local LLM engine | LM Studio OpenAI-compatible API | Connected |
-| Cloud LLM engine (demo) | Gemini API (`gemini-2.5-flash`) | Optional `--backend api` |
+| Cloud LLM engine (demo) | Gemini API (`gemini-3.1-flash-lite`) | Optional `--backend api` |
 | AI integration | OpenAI Python SDK v1.x | In use |
 | WSL networking | Dynamic default gateway discovery | Implemented |
 | Vector database | Weaviate 1.24.4 | Deployed |
@@ -533,7 +531,7 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Intermediate representation | AST / JSON | Implemented (`PLC_AST`) |
 | PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft generator and LD IR generator MVP implemented |
 | Interchange format | PLCopen XML | Planned |
-| Experimentation | Jupyter notebooks | Planned |
+| Experimentation | Jupyter notebooks | `explore_gherkin_ast.ipynb` |
 
 Dependency versions, including the OpenAI SDK and its transitive dependencies,
 are pinned in `requirements.txt`.
@@ -597,8 +595,9 @@ against `data/requirements/sample_control.txt` (LM Studio + `gemma-4-E4B`,
 600 s timeout), successfully extracting 4 equipment items, 2 interlocks, and 5
 sequence steps, with output written to `data/parsed/sample_control_parsed.json`.
 The script also supports a `--backend {local,api}` argument (default
-`local`); the `api` backend targets `gemini-2.5-flash` via the Google cloud
-API (requires `GEMINI_API_KEY`) for demos where local inference is too slow.
+`local`); the `api` backend targets `gemini-3.1-flash-lite` via the Google
+cloud API (requires `GEMINI_API_KEY`) for demos where local inference is too
+slow.
 
 ##### Core Extraction Logic — Verification Results
 
@@ -644,7 +643,8 @@ clean pass. The findings below are recorded for follow-up.
 ##### Local vs. Cloud Extraction Comparison
 
 The same input (`sample_control.txt`) was parsed with both backends — local LM
-Studio and the cloud `gemini-2.5-flash` via the `api` backend (run at the time
+Studio and the cloud `gemini-3.1-flash-lite` via the `api` backend (run at
+the time
 as `--backend gemini`, since renamed to `--backend api` with no functional
 change). Both runs extracted all interlocks and sequence steps correctly with no
 fabricated content. The cloud run improved on every local-run issue logged in
