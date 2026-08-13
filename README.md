@@ -8,9 +8,9 @@ artifacts and ultimately generate IEC 61131-3 PLC programs.
 > **Project status:** `E2S4 - IEC 61131-3 ST and LD generation` has
 > deterministic MVP Structured Text and Ladder Diagram IR generators, plus
 > separate `llm_direct` and hybrid Structured Text / LD IR generation
-> approaches for backend comparison (`src/st_gen_hybrid.py` renders
-> LLM-suggested timers, analogue thresholds, and colour states
-> deterministically).
+> approaches for backend comparison (`src/st_gen_hybrid.py` and
+> `src/ld_ir_gen_hybrid.py` render LLM-suggested timers, analogue
+> thresholds, and colour states deterministically).
 > `E2S3 - AST/JSON intermediate representation` is complete across three
 > candidate approaches (A, B, and C).
 > `src/ast_gen_A.py` folds a parsed `SystemRequirement` JSON file (E2S1 output)
@@ -100,6 +100,12 @@ The following capabilities define the planned product scope:
   Python renders the final Structured Text deterministically, including TON
   function-block calls and REAL comparisons, writing `_st_hybrid_api.st` and
   `_st_hybrid_local.st` outputs.
+- **Hybrid Ladder Diagram IR draft generation** (`src/ld_ir_gen_hybrid.py`)
+  from validated `PLC_AST` JSON: the LLM supplies structured code intent and
+  Python renders the LD IR deterministically, producing analogue comparison
+  contacts (`operator`/`threshold` fields), network-level timer metadata, and
+  colour-state review notes, writing `_ld_hybrid_api.json` and
+  `_ld_hybrid_local.json` outputs.
 - **LLM Direct Ladder Diagram IR draft generation**
   (`src/ld_ir_gen_llm_direct.py`) from validated `PLC_AST` JSON, producing
   backend-specific comparison outputs with `_ld_llm_direct_api.json` and
@@ -863,6 +869,7 @@ limitation for local verification.
 - [x] **E2S4T4 - Add LLM Direct Structured Text generator**
 - [x] **E2S4T5 - Add LLM Direct LD IR generator**
 - [x] **E2S4T6 - Add Hybrid Structured Text generator**
+- [x] **E2S4T7 - Add Hybrid LD IR generator**
 
 `src/plc_code_schemas.py` defines the initial schema-only contracts for future
 PLC code generation. ST output is represented by `STProgram` and `STBlock`; LD
@@ -893,6 +900,16 @@ device is declared `REAL`), and colour-state review comments. Backend-flattened
 tool args (for example `'SL-301: green'` or a bare `'5'` duration) are
 normalized deterministically by Python before Pydantic validation. Writes
 `_st_hybrid_api.st` / `_st_hybrid_local.st` outputs.
+
+E2S4T7 adds `src/ld_ir_gen_hybrid.py`, the hybrid LD IR counterpart that
+reuses the E2S4T6 intent pipeline. Python renders analogue intents as
+`LDContact` entries carrying `operator`/`threshold` fields, timer intents as
+network-level `timer_duration_seconds`/`timer_description` metadata, and
+colour/state intents as review notes — replacing the deterministic baseline's
+`TODO_UNSUPPORTED_CONDITION` placeholders for timer and analogue conditions.
+`src/plc_code_schemas.py` gained optional `operator`/`threshold` on
+`LDContact` and timer fields on `LDNetwork`; all default to `None`, keeping
+existing deterministic and LLM-direct outputs unchanged.
 
 E2S4T3 adds `src/ld_ir_gen.py`, a deterministic AST-to-LD-IR generator. It
 outputs structured LD JSON under `data/plc/ld/*.json`. LD IR represents
@@ -952,10 +969,10 @@ Next verification work moves to EPIC-3 `E3S1 - Output artifact verification`,
 including pytest-based structure checks, MATIEC syntax/compile investigation,
 and OpenPLC Editor / Runtime validation exploration.
 
-The hybrid ST generator (`E2S4T6`) is now implemented: the LLM converts
-complex actions (timers, analogue thresholds, sequence state, colour states)
-into structured code intent, and Python renders the final code
-deterministically. The hybrid LD IR generator (`E2S4T7`) remains planned.
+Both hybrid generators are now implemented (`E2S4T6` Structured Text and
+`E2S4T7` LD IR): the LLM converts complex actions (timers, analogue
+thresholds, sequence state, colour states) into structured code intent, and
+Python renders the final code deterministically.
 
 ## 👥 Contributors
 
@@ -981,6 +998,7 @@ deterministically. The hybrid LD IR generator (`E2S4T7`) remains planned.
 | E2S4T4 | Added `src/st_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to Structured Text draft generator with local/API backend support, Markdown-fence cleanup, basic ST structure validation, and backend-specific output suffixes; generated comparison outputs for `signal_light_demo` and `sample_control` |
 | E2S4T5 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
 | E2S4T6 | Added `src/st_hybrid_schemas.py` (structured code-intent contracts) and `src/st_gen_hybrid.py`, a hybrid `PLC_AST` to Structured Text generator where the LLM supplies code intent (timers, analogue thresholds, colour states) via function calls and Python renders final ST deterministically (TON blocks, REAL comparisons), with grounding checks and backend-arg normalization; verified on both examples with the `api` backend plus `tests/test_st_hybrid_gen.py` |
+| E2S4T7 | Added `src/ld_ir_gen_hybrid.py`, a hybrid `PLC_AST` to LD IR generator reusing the E2S4T6 intent pipeline; extended `src/plc_code_schemas.py` with optional analogue-contact (`operator`/`threshold`) and timer-network fields; Python renders analogue contacts, timer metadata, and colour/state notes deterministically; verified on both examples with the `api` backend plus `tests/test_ld_ir_gen_hybrid.py` |
 
 ## 📜 Branch History
 

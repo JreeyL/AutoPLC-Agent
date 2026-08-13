@@ -59,13 +59,26 @@ class STProgram(BaseModel):
 
 
 class LDContact(BaseModel):
-    """One Ladder Diagram contact."""
+    """One Ladder Diagram contact.
+
+    ``operator`` and ``threshold`` are optional analogue-comparison fields
+    introduced for the hybrid LD IR generator (E2S4T7); they stay ``None``
+    for plain boolean contacts and keep the contract backward compatible.
+    """
 
     variable: str = Field(
         description="PLC variable referenced by this contact."
     )
     contact_type: Literal["normally_open", "normally_closed"] = Field(
         description="Contact behavior: normally_open or normally_closed."
+    )
+    operator: Optional[Literal[">=", "<=", ">", "<", "=="]] = Field(
+        default=None,
+        description="Optional analogue comparison operator for this contact.",
+    )
+    threshold: Optional[float] = Field(
+        default=None,
+        description="Optional analogue threshold value for this contact.",
     )
 
 
@@ -122,6 +135,14 @@ class LDNetwork(BaseModel):
     notes: list[str] = Field(
         default_factory=list,
         description="Review notes for MVP limitations or unsupported mappings.",
+    )
+    timer_duration_seconds: Optional[float] = Field(
+        default=None,
+        description="Optional hybrid timer duration for this network (E2S4T7).",
+    )
+    timer_description: Optional[str] = Field(
+        default=None,
+        description="Optional human-readable description of the hybrid timer (E2S4T7).",
     )
 
 
