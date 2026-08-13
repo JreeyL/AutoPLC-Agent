@@ -52,7 +52,7 @@ def main() -> None:
         api_key="lm-studio",
         model="local-model",
         max_tokens=512,
-        timeout=180,
+        timeout=600,
         max_retries=0,
     )
 
