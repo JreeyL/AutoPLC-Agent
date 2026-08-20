@@ -1070,10 +1070,22 @@ the sequence). LLM Direct output is validated to the basic contract only — it
 is a raw LLM draft by convention, and strict ST conformance is deferred to the
 MATIEC compiler check (E3S1T7). 10 tests pass; the full suite is now 61 tests.
 
-Remaining E3S1 work: LD / hybrid structural checks (E3S1T5-T6), MATIEC
-investigation (E3S1T7), OpenPLC compile + open-source runtime simulation
-(E3S1T8), and a TIA Portal / PLCSIM documentation-only feasibility study
-(E3S1T9).
+- [x] **E3S1T5 - Add pytest structural checks for generated LD IR artifacts**
+
+E3S1T5 adds `tests/test_ld_ir_validation.py`, a fully offline suite over
+`data/plc/ld/*.json`. Common checks apply to all LD IR files: `LDProgram`
+schema validity, unique network IDs, legal contact/coil types, a non-empty coil
+per network, sequence-before-interlock ordering, and a `source_ast_node_id`
+stamp per network. Python-rendered outputs (deterministic + hybrid) add
+`priority >= 1` and per-network step/interlock traceability; LLM Direct
+(comparison draft) uses the common contract plus non-negative priority and
+`source_ast_node_id`. Note: some `sample_control` sequence networks are
+legitimate 0-contact coil-only rungs, so contact count is not enforced. 10
+tests pass; the full suite is now 71 tests.
+
+Remaining E3S1 work: hybrid structural checks (E3S1T6), MATIEC investigation
+(E3S1T7), OpenPLC compile + open-source runtime simulation (E3S1T8), and a TIA
+Portal / PLCSIM documentation-only feasibility study (E3S1T9).
 
 #### E3S2: PLCopen XML export
 
