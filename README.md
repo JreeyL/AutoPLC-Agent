@@ -1045,10 +1045,23 @@ per-scenario traceability cannot be asserted from the `.feature` artifact. It
 requires a generator-side change that persists the traceability JSON and is
 tracked separately.
 
-Remaining E3S1 work: PLC_AST / ST / LD / hybrid structural checks
-(E3S1T3-T6), MATIEC investigation (E3S1T7), OpenPLC compile + open-source
-runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
-feasibility study (E3S1T9).
+- [x] **E3S1T3 - Add pytest structural checks for `PLC_AST` artifacts**
+
+E3S1T3 adds `tests/test_ast_validation.py`, a fully offline suite over every
+`data/ast/*.json`. Each artifact deserializes into `PLC_AST` and is checked
+for: non-empty devices with continuous `step_id`, interlocks with non-empty
+condition / forced_action / affected_devices and `priority >= 1`, provenance
+stamps (`source_step_id` / `source_interlock_condition`) with
+`source_requirement_file` / `source_gherkin_file` resolving to real input
+files, and grounding — each `device.source_equipment` maps verbatim into the
+source parsed `equipment_list`, and device tags referenced in sequence /
+interlock text resolve to a known device. 8 tests pass; the full suite is now
+51 tests.
+
+Remaining E3S1 work: ST / LD / hybrid structural checks (E3S1T4-T6), MATIEC
+investigation (E3S1T7), OpenPLC compile + open-source runtime simulation
+(E3S1T8), and a TIA Portal / PLCSIM documentation-only feasibility study
+(E3S1T9).
 
 #### E3S2: PLCopen XML export
 
