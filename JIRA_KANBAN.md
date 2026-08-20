@@ -49,8 +49,11 @@ Action items captured from supervisor's feedback during the interim presentation
 * **[E3S1T6] Extend the verification suite to hybrid generator outputs** — planned.
   * Once the E2S4T6/E2S4T7 hybrid generators land, run the same structural and external-tool checks on their outputs.
 * **[E3S1T7] Investigate MATIEC for IEC 61131-3 ST syntax / compile checking** — planned.
-* **[E3S1T8] Investigate OpenPLC Editor / Runtime for compiling and validating generated PLC logic** — planned.
-* **[E3S1T9] Evaluate runtime simulation and vendor-specific TIA Portal / PLCSIM validation** — planned (later-stage work).
+* **[E3S1T8] Compile and validate generated PLC logic with OpenPLC Editor / Runtime (primary target)** — planned.
+  * OpenPLC is the primary practical target for compiling and open-source runtime simulation in the Linux/WSL environment. Install OpenPLC Editor / Runtime in WSL, compile the generated ST (and LD IR exported as ST), and run open-source runtime simulation to confirm the logic behaves as specified.
+  * Record any ST syntax deviations that MATIEC/OpenPLC surfaces and feed them back to the generators.
+* **[E3S1T9] TIA Portal / PLCSIM validation — documentation-only feasibility study (lower priority)** — planned.
+  * Siemens TIA Portal / PLCSIM is Windows-only, licensed commercial software that cannot run inside the Linux/WSL environment. Treat this as a lower-priority, documentation-only / theoretical feasibility study: describe how the generated artifacts would map to TIA Portal and how PLCSIM could be used for closed-loop simulation, without attempting a live run.
 
 #### E3S2: PLCopen XML export
 * **[E3S2T1] Create export module mapping PLC_AST to interoperable PLCopen XML** — planned.
@@ -58,8 +61,9 @@ Action items captured from supervisor's feedback during the interim presentation
   * Check XML schema conformance, required element completeness, traceability preservation, and readability by standard PLC engineering tools.
 
 #### E3S3: Component tests and validation framework
-* **[E3S3T1] Consolidate deterministic grounding-check patterns into a reusable validation framework** — planned.
-  * Reuse and extend the grounding checks from E2S2 (Gherkin scenario grounding) and E2S3 Approach C (equipment/scenario grounding, authoritative field protection) as shared validation helpers.
+* **[E3S3T1] Build a two-tier validation framework** — planned.
+  * **Tier 1 — Deterministic grounding & schema validation:** consolidate the device, step, and scenario grounding rules from E2S2 (Gherkin scenario grounding) and E2S3 Approach C (equipment/scenario grounding, authoritative field protection) into reusable validation helpers.
+  * **Tier 2 — LLM-based semantic intent evaluator:** implement a structured function-calling / tool-calling evaluation pipeline (following the E2S3 Approach C design pattern) where the LLM inspects generated ST and LD artifacts against the original requirements and emits structured review verdicts — business-logic coverage, missing-step alerts, and safety-hazard flags — while Python retains deterministic aggregation and pass/fail gate authority.
 * **[E3S3T2] Add unit tests for parsers and generators** — planned.
   * Cover `req_parser.py`, `gherkin_gen.py`, `ast_gen_A/B/C.py`, `st_gen.py`, `ld_ir_gen.py`, and the `llm_direct` wrappers.
 * **[E3S3T3] Add negative / failure-path test cases** — planned.
