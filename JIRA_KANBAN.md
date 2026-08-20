@@ -36,8 +36,8 @@ Action items captured from supervisor's feedback during the interim presentation
 ### EPIC-3: Validation & Export
 
 #### E3S1: Output artifact verification
-* **[E3S1T1] Add pytest structural checks for parsed `SystemRequirement` artifacts** — planned.
-  * Validate `data/parsed/*.json` against `SystemRequirement`: required fields, device/interlock/sequence structure, and source-text traceability.
+* **[E3S1T1] Add pytest structural checks for parsed `SystemRequirement` artifacts** — complete.
+  * Added `tests/test_parsed_requirements.py`: a fully offline, deterministic structural suite over `data/parsed/*_parsed_*.json`. Each artifact deserializes to the `SystemRequirement` model; equipment/sequence/interlock fields are non-empty; `step_id` is monotonic and continuous from 1; and device tags referenced in interlock/sequence text ground to `equipment_list` (matching `name` or `type` to stay valid for the `local` backend, which historically embeds tags in `type`). 6 tests pass; full suite now 36 tests.
 * **[E3S1T2] Add pytest structural checks for Gherkin `.feature` artifacts** — planned.
   * Validate `data/gherkin/*.feature` syntax (`Feature`/`Scenario`/`Given`/`When`/`Then`), scenario grounding to source steps, and traceability (`source_step_id`/`source_interlock_condition`).
 * **[E3S1T3] Add pytest structural checks for `PLC_AST` artifacts** — planned.

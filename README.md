@@ -1012,6 +1012,37 @@ Both hybrid generators are now implemented (`E2S4T6` Structured Text and
 thresholds, sequence state, colour states) into structured code intent, and
 Python renders the final code deterministically.
 
+### EPIC-3: Validation & Export
+
+#### E3S1: Output artifact verification
+
+- [x] **E3S1T1 - Add pytest structural checks for parsed `SystemRequirement` artifacts**
+
+E3S1T1 adds `tests/test_parsed_requirements.py`, a fully offline, deterministic
+structural-verification suite over `data/parsed/*_parsed_*.json`. Each artifact
+is deserialized into the `SystemRequirement` Pydantic model and checked for:
+non-empty equipment / sequence / interlock fields, monotonic continuous
+`step_id`, and grounding of device tags referenced in interlock/sequence text
+back to the `equipment_list` (matching a device's `name` or `type` to remain
+valid for the `local` backend, which historically embeds engineering tags in
+`type`). 6 tests pass; the full suite is now 36 tests.
+
+Remaining E3S1 work: Gherkin / PLC_AST / ST / LD / hybrid structural checks
+(E3S1T2-T6), MATIEC investigation (E3S1T7), OpenPLC compile + open-source
+runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
+feasibility study (E3S1T9).
+
+#### E3S2: PLCopen XML export
+
+- [ ] **E3S2T1 - Create export module mapping PLC_AST to interoperable PLCopen XML** (planned).
+- [ ] **E3S2T2 - Validate generated PLCopen XML** (planned).
+
+#### E3S3: Component tests and validation framework
+
+- [ ] **E3S3T1 - Build a two-tier validation framework** (planned).
+- [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
+- [ ] **E3S3T3 - Add negative / failure-path test cases** (planned).
+
 ## 👥 Contributors
 
 | Task ID | Contribution |
