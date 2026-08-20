@@ -1027,8 +1027,26 @@ back to the `equipment_list` (matching a device's `name` or `type` to remain
 valid for the `local` backend, which historically embeds engineering tags in
 `type`). 6 tests pass; the full suite is now 36 tests.
 
-Remaining E3S1 work: Gherkin / PLC_AST / ST / LD / hybrid structural checks
-(E3S1T2-T6), MATIEC investigation (E3S1T7), OpenPLC compile + open-source
+- [x] **E3S1T2 - Add pytest structural checks for Gherkin `.feature` artifacts**
+
+E3S1T2 adds `tests/test_gherkin_features.py`, a fully offline suite that parses
+`data/gherkin/*.feature` with the standard `gherkin-official` parser and checks
+generated feature: valid Gherkin syntax, a non-empty feature title with at
+least one scenario, valid Given/When/Then/And step keywords with a `When` +
+`Then` per scenario, and scenario coverage of the paired
+`data/parsed/*_parsed_*.json` items (sequence steps + interlocks). 7 tests pass
+(one `expectedFailure` for the known E2S2 `local` coverage gap on
+`sample_control`); the full suite is now 43 tests.
+
+**Traceability boundary:** `.feature` text does not carry the
+`source_step_id` / `source_interlock_condition` fields (they live on the
+in-memory `GherkinScenario` model and are not emitted by the renderer), so
+per-scenario traceability cannot be asserted from the `.feature` artifact. It
+requires a generator-side change that persists the traceability JSON and is
+tracked separately.
+
+Remaining E3S1 work: PLC_AST / ST / LD / hybrid structural checks
+(E3S1T3-T6), MATIEC investigation (E3S1T7), OpenPLC compile + open-source
 runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
 feasibility study (E3S1T9).
 
