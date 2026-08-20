@@ -491,6 +491,7 @@ AutoPLC-Agent/
 │   ├── ld_ir_gen_hybrid.py  # Hybrid PLC_AST to LD IR JSON generator
 │   ├── ld_ir_gen_llm_direct.py # LLM-direct PLC_AST to LD IR JSON generator
 │   ├── matiec_checker.py      # MATIEC iec2c compiler wrapper (E3S1T7)
+│   ├── openplc_checker.py     # OpenPLC v3 runtime compile + simulation wrapper (E3S1T8)
 │   ├── plc_code_schemas.py  # Pydantic ST/LD output contracts
 │   ├── query.py             # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py        # Natural-language requirement parser to structured JSON
@@ -1122,9 +1123,35 @@ non-standard syntax (a dangling `ELSIF` / missing `;`) so they do not compile.
 These are surfaced via `expectedFailure` and inform generator refinement. Full
 suite now 89 tests.
 
-Remaining E3S1 work moves to external tooling: OpenPLC compile + open-source
-runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
-feasibility study (E3S1T9).
+- [x] **E3S1T8 - Compile and validate generated PLC logic with OpenPLC Editor / Runtime**
+
+E3S1T8 adds `src/openplc_checker.py` and `tests/test_openplc_simulation.py`
+(skip-if-not-available). `run_openplc_simulation` strips `//` comments, wraps
+`PROGRAM` blocks in a minimal `CONFIGURATION`/`RESOURCE`/`TASK`, compiles with
+the OpenPLC `compile_program.sh`, and runs `core/openplc` under `timeout` to
+confirm crash-free scan cycles; compiled outputs and `active_program` are backed
+up and restored. Deterministic and `signal_light_demo` hybrid ST compile and
+simulate stably; `sample_control` hybrid is a known `expectedFailure` — it
+carries the same `REAL >= INT` literal (`tank_level_sensor >= 80`) the OpenPLC
+`iec2c` rejects, confirming the E3S1T7 generator-refinement item. Full suite now
+92 tests.
+
+Key design decisions: the OpenPLC runtime is an infinite scan loop, so the
+simulation uses the minimal `TASK` wrapper's default 20ms scan period (50
+scans/sec), so a 1s run executes ~50 scan cycles; the run is wrapped in
+`timeout <run_seconds>` (1s default) and terminated after; a
+kill-after-full-duration return code (124) means the PLC ran stably
+with no panic/segfault. OpenPLC runs only one business program at a time and
+compiling overwrites `webserver/core/openplc` and `active_program`, so the
+wrapper backs both up and restores them in a `finally` block. Test scope: of
+the 10 `.st` artifacts, the 6 Python-rendered (deterministic + hybrid) are
+exercised — 4 baseline cases compile and simulate stably, and 2 negative cases
+(`sample_control` hybrid) are `expectedFailure` on the same `REAL >= INT`
+float-literal error seen in E3S1T7. LLM Direct outputs are excluded per their
+comparison-draft role.
+
+Remaining E3S1 work: TIA Portal / PLCSIM documentation-only feasibility study
+(E3S1T9).
 
 #### E3S2: PLCopen XML export
 
@@ -1169,6 +1196,7 @@ feasibility study (E3S1T9).
 | E3S1T5 | Added `tests/test_ld_ir_validation.py`, structural validation for generated LD IR artifacts |
 | E3S1T6 | Added `tests/test_hybrid_validation.py`, structural validation of hybrid generator outputs (TON / REAL / analogue / timer / colour) |
 | E3S1T7 | Added `src/matiec_checker.py` and `tests/test_matiec_compilation.py`, integrating the MATIEC `iec2c` compiler wrapper and ST compile checks |
+| E3S1T8 | Added `src/openplc_checker.py` and `tests/test_openplc_simulation.py`, integrating OpenPLC v3 runtime compilation, crash-free scan cycle simulation (timeout-wrapped), and state backup/restore |
 
 ## 📜 Branch History
 
