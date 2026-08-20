@@ -1058,7 +1058,19 @@ source parsed `equipment_list`, and device tags referenced in sequence /
 interlock text resolve to a known device. 8 tests pass; the full suite is now
 51 tests.
 
-Remaining E3S1 work: ST / LD / hybrid structural checks (E3S1T4-T6), MATIEC
+- [x] **E3S1T4 - Add pytest structural checks for generated ST artifacts**
+
+E3S1T4 adds `tests/test_st_validation.py`, a fully offline suite over
+`data/plc/st/*.st` with a two-tier check. A basic contract applies to all ST
+files (`PROGRAM`/`END_PROGRAM` wrapper, non-empty executable logic, no Markdown
+fences); strict checks apply to the Python-rendered deterministic + hybrid
+outputs (`VAR`/`END_VAR`, balanced `IF`/`END_IF`, traceability comments,
+`Sequence Logic` + `Safety Interlocks` headers, and interlock-override after
+the sequence). LLM Direct output is validated to the basic contract only — it
+is a raw LLM draft by convention, and strict ST conformance is deferred to the
+MATIEC compiler check (E3S1T7). 10 tests pass; the full suite is now 61 tests.
+
+Remaining E3S1 work: LD / hybrid structural checks (E3S1T5-T6), MATIEC
 investigation (E3S1T7), OpenPLC compile + open-source runtime simulation
 (E3S1T8), and a TIA Portal / PLCSIM documentation-only feasibility study
 (E3S1T9).
