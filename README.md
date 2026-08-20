@@ -1083,9 +1083,24 @@ stamp per network. Python-rendered outputs (deterministic + hybrid) add
 legitimate 0-contact coil-only rungs, so contact count is not enforced. 10
 tests pass; the full suite is now 71 tests.
 
-Remaining E3S1 work: hybrid structural checks (E3S1T6), MATIEC investigation
-(E3S1T7), OpenPLC compile + open-source runtime simulation (E3S1T8), and a TIA
-Portal / PLCSIM documentation-only feasibility study (E3S1T9).
+- [x] **E3S1T6 - Extend the verification suite to hybrid generator outputs**
+
+E3S1T6 adds `tests/test_hybrid_validation.py`, a fully offline, strictly
+structural suite over the hybrid ST and LD IR outputs. It is deliberately
+limited to structure — no LLM and no business-logic semantic review, which is
+deferred to E3S3T1. It verifies hybrid mechanism consistency (ST `TON`
+declaration/invocation/`PT`, valid REAL comparison operators, `// Hybrid`
+renderer markers; LD analogue `operator`/`threshold` and positive timer
+metadata), per-sample capability coverage (`sample_control` -> timer+analogue,
+`signal_light_demo` -> colour), and api/local structural consistency. 11 tests
+pass; the full suite is now 82 tests.
+
+With E3S1T1-T6 complete, the pytest structural-verification layer now covers
+every pipeline artifact: parsed `SystemRequirement`, Gherkin `.feature`,
+`PLC_AST`, ST, LD IR, and hybrid outputs. Remaining E3S1 work moves to
+external tooling: MATIEC investigation (E3S1T7), OpenPLC compile + open-source
+runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
+feasibility study (E3S1T9).
 
 #### E3S2: PLCopen XML export
 
