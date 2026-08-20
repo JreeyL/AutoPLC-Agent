@@ -494,6 +494,7 @@ AutoPLC-Agent/
 │   ├── openplc_checker.py     # OpenPLC v3 runtime compile + simulation wrapper (E3S1T8)
 │   ├── plc_code_schemas.py  # Pydantic ST/LD output contracts
 │   ├── plcopen_xml_exporter.py # PLCopen TC6 XML 2.01 exporter (E3S2T1)
+│   ├── plcopen_xml_validator.py # PLCopen TC6 XML 2.01 validator (E3S2T2)
 │   ├── query.py             # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py        # Natural-language requirement parser to structured JSON
 │   ├── schemas.py           # Pydantic SystemRequirement structured-output schemas
@@ -1167,8 +1168,17 @@ comments); `export_all_asts` batch-converts `data/ast/*.json` to
 `data/plc/xml/*.xml`. 7 tests verify well-formed XML, required sections, AST
 device-to-variable mapping, and ST-body traceability; full suite now 99 tests.
 
-- [ ] **E3S2T2 - Validate generated PLCopen XML** (planned).
-- [ ] **E3S2T2 - Validate generated PLCopen XML** (planned).
+- [x] **E3S2T2 - Validate generated PLCopen XML**
+
+E3S2T2 adds `src/plcopen_xml_validator.py` and
+`tests/test_plcopen_xml_validation.py` (lxml with stdlib `xml.etree`
+fallback). `validate_plcopen_xml` checks each exported document against the
+TC6 v2.01 required-element set — namespace/`schemaLocation`, `fileHeader` /
+`contentHeader` metadata completeness, program POU with named/typed interface
+variables, and a non-empty `body > ST` with `PROGRAM`/`END_PROGRAM` and
+traceability comments. All 10 exported XML files validate cleanly and the tests
+cross-check POU variables against the originating AST devices plus per-step
+provenance. 9 tests pass; full suite now 108 tests.
 
 #### E3S3: Component tests and validation framework
 
