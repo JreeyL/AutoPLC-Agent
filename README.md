@@ -490,6 +490,7 @@ AutoPLC-Agent/
 │   ├── ld_ir_gen.py         # Deterministic PLC_AST to LD IR JSON generator
 │   ├── ld_ir_gen_hybrid.py  # Hybrid PLC_AST to LD IR JSON generator
 │   ├── ld_ir_gen_llm_direct.py # LLM-direct PLC_AST to LD IR JSON generator
+│   ├── matiec_checker.py      # MATIEC iec2c compiler wrapper (E3S1T7)
 │   ├── plc_code_schemas.py  # Pydantic ST/LD output contracts
 │   ├── query.py             # LlamaIndex RAG query over Weaviate and LM Studio
 │   ├── req_parser.py        # Natural-language requirement parser to structured JSON
@@ -1097,8 +1098,31 @@ pass; the full suite is now 82 tests.
 
 With E3S1T1-T6 complete, the pytest structural-verification layer now covers
 every pipeline artifact: parsed `SystemRequirement`, Gherkin `.feature`,
-`PLC_AST`, ST, LD IR, and hybrid outputs. Remaining E3S1 work moves to
-external tooling: MATIEC investigation (E3S1T7), OpenPLC compile + open-source
+`PLC_AST`, ST, LD IR, and hybrid outputs.
+
+- [x] **E3S1T7 - Investigate MATIEC for IEC 61131-3 ST syntax / compile checking**
+
+E3S1T7 adds `src/matiec_checker.py`, a wrapper around the MATIEC `iec2c`
+binary, and `tests/test_matiec_compilation.py`, which compiles every generated
+`.st` file (skipping gracefully when MATIEC is absent). The wrapper locates
+`iec2c`, discovers the MATIEC standard library (`ieclib.txt`), strips `//` line
+comments (MATIEC only accepts `(* *)`), optionally synthesizes a
+`CONFIGURATION`/`RESOURCE`/`TASK` wrapper, compiles in an isolated tempdir, and
+returns a `CompilationResult`; temp dirs are always cleaned up. 7 tests pass.
+
+**Key MATIEC compiler compatibility findings** (recorded, not business-logic
+semantics): deterministic and `signal_light_demo` hybrid ST compile
+successfully once `//` comments are normalized; `sample_control` hybrid ST uses
+a `REAL >= INT` literal (`tank_level_sensor >= 80`) that MATIEC rejects as a
+data-type mismatch (needs `80.0`); the literal is isolated to the Python
+rendering template in `src/st_gen_hybrid.py` and is slated for a
+deterministic float-formatting fix (emit `80.0`) in generator refinement; and
+LLM Direct `local` outputs carry
+non-standard syntax (a dangling `ELSIF` / missing `;`) so they do not compile.
+These are surfaced via `expectedFailure` and inform generator refinement. Full
+suite now 89 tests.
+
+Remaining E3S1 work moves to external tooling: OpenPLC compile + open-source
 runtime simulation (E3S1T8), and a TIA Portal / PLCSIM documentation-only
 feasibility study (E3S1T9).
 
@@ -1138,6 +1162,13 @@ feasibility study (E3S1T9).
 | E2S4T5 | Added `src/ld_ir_gen_llm_direct.py`, a separate `llm_direct` `PLC_AST` to LD IR JSON generator with local/API backend support, JSON cleanup/parsing, `LDProgram` validation, light LD structure checks, validation-feedback retries, schema-guided local JSON output, and backend-specific output suffixes; generated API and local comparison outputs for `signal_light_demo` and `sample_control` |
 | E2S4T6 | Added `src/st_hybrid_schemas.py` (structured code-intent contracts) and `src/st_gen_hybrid.py`, a hybrid `PLC_AST` to Structured Text generator where the LLM supplies code intent (timers, analogue thresholds, colour states) via function calls and Python renders final ST deterministically (TON blocks, REAL comparisons), with grounding checks and backend-arg normalization; verified on both examples with the `api` and `local` (Gemma 4 E2B) backends, with local runs driving hardening (compact keyed-mapping normalization, colour-state degrade-to-note) plus `tests/test_st_hybrid_gen.py` |
 | E2S4T7 | Added `src/ld_ir_gen_hybrid.py`, a hybrid `PLC_AST` to LD IR generator reusing the E2S4T6 intent pipeline; extended `src/plc_code_schemas.py` with optional analogue-contact (`operator`/`threshold`) and timer-network fields; Python renders analogue contacts, timer metadata, and colour/state notes deterministically; verified on both examples with the `api` and `local` (Gemma 4 E2B) backends — local runs confirmed the E2S4T6 hardening applies unchanged (6 unparseable colour-state entries degraded to notes) plus `tests/test_ld_ir_gen_hybrid.py` |
+| E3S1T1 | Added `tests/test_parsed_requirements.py`, a deterministic structural-validation suite for parsed `SystemRequirement` JSON artifacts |
+| E3S1T2 | Added `tests/test_gherkin_features.py`, an offline `gherkin-official` structural suite for generated Gherkin `.feature` artifacts (with a known `local`-coverage gap marked expected-failure) |
+| E3S1T3 | Added `tests/test_ast_validation.py`, a structural suite for `PLC_AST` artifacts (devices, sequence, interlocks, provenance, grounding) |
+| E3S1T4 | Added `tests/test_st_validation.py`, tiered structural validation for generated ST artifacts |
+| E3S1T5 | Added `tests/test_ld_ir_validation.py`, structural validation for generated LD IR artifacts |
+| E3S1T6 | Added `tests/test_hybrid_validation.py`, structural validation of hybrid generator outputs (TON / REAL / analogue / timer / colour) |
+| E3S1T7 | Added `src/matiec_checker.py` and `tests/test_matiec_compilation.py`, integrating the MATIEC `iec2c` compiler wrapper and ST compile checks |
 
 ## 📜 Branch History
 
