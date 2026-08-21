@@ -502,6 +502,7 @@ AutoPLC-Agent/
 │   ├── st_gen_hybrid.py     # Hybrid PLC_AST to Structured Text draft generator
 │   ├── st_gen_llm_direct.py # LLM-direct PLC_AST to Structured Text draft generator
 │   ├── st_hybrid_schemas.py # Pydantic hybrid code-intent schemas
+│   ├── validation_framework.py # Tier 1 deterministic validation framework (E3S3T1)
 │   └── test_llm.py          # WSL-to-LM Studio API connectivity test
 ├── tests/            # unittest suites for the ST/LD generators
 ├── .gitignore        # Repository ignore rules
@@ -1182,7 +1183,25 @@ provenance. 9 tests pass; full suite now 108 tests.
 
 #### E3S3: Component tests and validation framework
 
-- [ ] **E3S3T1 - Build a two-tier validation framework** (planned).
+- [x] **E3S3T1 (Part 1) - Tier 1 deterministic validation framework**
+
+E3S3T1 Tier 1 adds `src/validation_framework.py` and
+`tests/test_validation_framework.py` (13 tests). `Tier1Validator`
+consolidates the deterministic offline checks into one pipeline-level
+validator over `parsed` / `PLC_AST` / ST / LD artifacts:
+equipment grounding (verbatim `source_equipment` into the parsed
+`equipment_list`, ST/LD variable resolution, unknown device-tag rejection),
+ID continuity (continuous `step_id`, interlock `priority >= 1`, unique LD
+`network_id`), authoritative field protection (verbatim interlock condition /
+step references into the parsed requirement), and the structural contract
+(`PROGRAM`/`END_PROGRAM`, balanced IF/END_IF, sequence-before-safety).
+Both real pipelines pass; negative cases (ungrounded devices, broken
+sequences, tampered interlocks, duplicate networks, unbalanced ST) are
+strictly rejected via structured `Tier1Result`/`ValidationIssue` codes. Full
+suite now 121 tests. Tier 2 (LLM-based semantic intent evaluator) remains
+planned.
+
+- [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
 - [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
 - [ ] **E3S3T3 - Add negative / failure-path test cases** (planned).
 
