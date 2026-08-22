@@ -5,19 +5,26 @@ Technology (IT) and Operational Technology (OT) workflows. The project aims to
 turn natural-language control requirements into structured, reviewable
 artifacts and ultimately generate IEC 61131-3 PLC programs.
 
-> **Project status:** `E2S1 - E2S4` of the core pipeline are complete:
-> natural-language requirements are parsed into `SystemRequirement` JSON
-> (`src/req_parser.py`), converted to Gherkin `.feature` files
-> (`src/gherkin_gen.py`), assembled into validated `PLC_AST` JSON through three
-> approaches A/B/C (`src/ast_gen_A/B/C.py`), and rendered to IEC 61131-3
-> Structured Text and Ladder Diagram IR drafts by three generation strategies
-> — deterministic (`st_gen.py`, `ld_ir_gen.py`), LLM Direct
+> **Project status:** the full pipeline is complete across EPIC-1, EPIC-2, and
+> EPIC-3 (see Task Completion Status below). Natural-language requirements are
+> parsed into `SystemRequirement` JSON (`src/req_parser.py`), converted to Gherkin
+> `.feature` files (`src/gherkin_gen.py`), assembled into validated `PLC_AST` JSON
+> through three approaches A/B/C (`src/ast_gen_A/B/C.py`), and rendered to IEC
+> 61131-3 Structured Text and Ladder Diagram IR drafts by three generation
+> strategies — deterministic (`st_gen.py`, `ld_ir_gen.py`), LLM Direct
 > (`st_gen_llm_direct.py`, `ld_ir_gen_llm_direct.py`), and hybrid
-> (`st_gen_hybrid.py`, `ld_ir_gen_hybrid.py`), the last two verified on both
-> the `api` and `local` (Gemma 4 E2B) backends. Two parallel RAG prototypes over
-> a Siemens manual (LlamaIndex and LangChain) remain in place. Remaining work is
-> tracked under `EPIC-3` in `JIRA_KANBAN.md`: output-artifact verification,
-> PLCopen XML export, and component-test consolidation.
+> (`st_gen_hybrid.py`, `ld_ir_gen_hybrid.py`), verified on the `api` and `local`
+> (Gemma 4 E2B) backends. Outputs are exported to PLCopen TC6 XML 2.01
+> (`src/plcopen_xml_exporter.py`) and validated (`src/plcopen_xml_validator.py`).
+> A two-tier validation framework (`src/validation_framework.py`) gates the
+> pipeline — Tier 1 deterministic grounding/schema checks plus Tier 2 LLM-based
+> semantic intent evaluation — with MATIEC `iec2c` compile checks and OpenPLC v3
+> runtime simulations (E3S1T7/E3S1T8). Two parallel RAG prototypes over a Siemens
+> manual (LlamaIndex and LangChain) remain in place. The test suite is
+> **363 tests** (plus a 4-case expected-failure set). E3S1T9 (TIA Portal / PLCSIM)
+> is **skipped** — Windows-only licensed software that cannot run in this
+> Linux/WSL environment; E3S3T3 (negative/failure-path expansion) is
+> **deferred** — core negative gates are embedded in Tier 1 and unit tests.
 
 ## Table of Contents
 
@@ -53,8 +60,14 @@ and rendering at every step:
 4. **Generate** standard IEC 61131-3 drafts — Structured Text (ST) and Ladder
    Diagram (LD) IR — via deterministic, LLM Direct, and hybrid generators
    (E2S4).
-5. **Export** interoperable PLCopen XML for downstream engineering tools
-   (planned, EPIC-3 E3S2).
+5. **Export** interoperable PLCopen TC6 XML 2.01 for downstream engineering
+   tools, then re-validate the exported documents (EPIC-3 E3S2,
+   `src/plcopen_xml_exporter.py` / `src/plcopen_xml_validator.py`).
+6. **Validate** the generated artifacts with a two-tier framework (EPIC-3
+   E3S3T1, `src/validation_framework.py`): Tier 1 deterministic grounding and
+   schema gates, then Tier 2 LLM-based semantic intent evaluation; `iec2c`
+   compile checks (MATIEC) and OpenPLC runtime simulation provide further
+   compile/simulation evidence (E3S1T7/E3S1T8).
 
 The platform is intended to assist engineers, not replace safety review,
 simulation, commissioning, or compliance processes. Generated control logic
@@ -193,20 +206,34 @@ Natural-Language Requirement (.txt)
             +------------------+
             |                  |
             v                  v
-  IEC 61131-3 ST / LD IR    PLCopen XML (planned, E3S2)
+  IEC 61131-3 ST / LD IR    PLCopen TC6 XML 2.01
+  (deterministic, LLM       (src/plcopen_xml_exporter.py,
+   direct, hybrid)           plcopen_xml_validator.py -- E3S2)
             |                  |
             +--------+---------+
                      v
-       Engineer Review and Validation
+     Two-Tier Validation Framework  (E3S3T1, src/validation_framework.py)
+       Tier 1 -- deterministic grounding & schema gates
+       Tier 2 -- LLM semantic-intent evaluation
+                     |
+                     v
+     Compile / Runtime Verification
+       MATIEC iec2c (E3S1T7) / OpenPLC v3 simulation (E3S1T8)
+                     |
+                     v
+           Engineer Review and Validation
 ```
 
 Each stage produces a validated, backend-tagged artifact under `data/`
-(`parsed/` -> `gherkin/` -> `ast/` -> `plc/st` and `plc/ld`). The `PLC_AST`
-representation is the central contract in this design: it allows every
-generated output to be traced back to an explicit requirement and makes it
-possible to add deterministic validation around LLM-generated content. Each
+(`parsed/` -> `gherkin/` -> `ast/` -> `plc/st`, `plc/ld`, and `plc/xml`). The
+`PLC_AST` representation is the central contract in this design: it allows
+every generated output to be traced back to an explicit requirement and makes
+it possible to add deterministic validation around LLM-generated content. Each
 downstream generator (`st_gen*`, `ld_ir_gen*`) consumes the validated `PLC_AST`
-directly, so no stage re-reads free-form text.
+directly, so no stage re-reads free-form text. The two-tier validation
+framework (`src/validation_framework.py`) then gates the rendered ST/LD
+artifacts end to end, with MATIEC/OpenPLC compile and simulation evidence from
+E3S1T7/E3S1T8.
 
 ## 🚀 Getting Started
 
@@ -473,7 +500,8 @@ AutoPLC-Agent/
 │   ├── ast/          # Generated PLC_AST JSON output
 │   ├── plc/
 │   │   ├── st/       # Generated Structured Text draft output
-│   │   └── ld/       # Generated Ladder Diagram IR JSON output
+│   │   ├── ld/       # Generated Ladder Diagram IR JSON output
+│   │   └── xml/      # Generated PLCopen TC6 XML 2.01 output
 │   └── siemens_manual.txt # Local ignored Siemens PLC text for RAG testing
 ├── notebooks/        # Experiments, evaluations, and prototypes
 ├── src/
@@ -502,10 +530,11 @@ AutoPLC-Agent/
 │   ├── st_gen_hybrid.py     # Hybrid PLC_AST to Structured Text draft generator
 │   ├── st_gen_llm_direct.py # LLM-direct PLC_AST to Structured Text draft generator
 │   ├── st_hybrid_schemas.py # Pydantic hybrid code-intent schemas
-│   ├── validation_framework.py # Tier 1 deterministic validation framework (E3S3T1)
+│   ├── validation_framework.py # Two-tier validation framework (E3S3T1): Tier 1 deterministic + Tier 2 semantic
 │   └── test_llm.py          # WSL-to-LM Studio API connectivity test
-├── tests/            # unittest suites for the ST/LD generators
+├── tests/            # unittest suites: artifact validation, parser/generator units, MATIEC/OpenPLC checks, XML export/validation, two-tier framework
 ├── .gitignore        # Repository ignore rules
+├── AGENTS.md         # Agent operating instructions for this repository
 ├── docker-compose.yml # Local Weaviate service definition
 ├── JIRA_KANBAN.md    # Jira-style Epic, Story, and Task tracker
 ├── LICENSE           # MIT license
@@ -513,9 +542,12 @@ AutoPLC-Agent/
 └── requirements.txt  # Python dependencies
 ```
 
-As implementation progresses, `src/` should be organized around clear
-boundaries such as requirements parsing, BDD generation, intermediate models,
-IEC 61131-3 generation, PLCopen XML export, and validation.
+The `src/` layout follows these boundaries directly: requirements parsing
+(`req_parser.py`), BDD generation (`gherkin_gen*.py`, `gherkin_schemas.py`),
+intermediate models (`schemas.py`, `ast_schemas.py`, `plc_code_schemas.py`),
+IEC 61131-3 generation (`st_gen*.py`, `ld_ir_gen*.py`), PLCopen XML export
+(`plcopen_xml_*.py`), artifact verification (`matiec_checker.py`,
+`openplc_checker.py`), and validation (`validation_framework.py`).
 
 ## 💻 Technology Stack
 
@@ -534,8 +566,12 @@ IEC 61131-3 generation, PLCopen XML export, and validation.
 | Structured extraction | Pydantic + LangChain `with_structured_output` | In use |
 | Requirements format | BDD / Gherkin syntax | Implemented (`src/gherkin_gen.py`) |
 | Intermediate representation | AST / JSON | Implemented (`PLC_AST`) |
-| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft generator and LD IR generator MVP implemented |
-| Interchange format | PLCopen XML | Planned |
+| PLC languages | IEC 61131-3 Structured Text and Ladder Diagram | ST draft and LD IR generators implemented (deterministic, LLM Direct, hybrid) |
+| Validation framework | Two-tier: Tier 1 deterministic gates + Tier 2 LLM semantic-intent evaluation | Implemented (`src/validation_framework.py`, E3S3T1) |
+| PLC compile check | MATIEC `iec2c` | Implemented (E3S1T7, `src/matiec_checker.py`, skipped if unavailable) |
+| Runtime simulation | OpenPLC v3 | Implemented (E3S1T8, `src/openplc_checker.py`, skipped if unavailable) |
+| Test framework | pytest + `unittest` (363 tests, 4 expected-failure) | In use |
+| Interchange format | PLCopen TC6 XML 2.01 (export + validate) | Implemented (`src/plcopen_xml_exporter.py`, `src/plcopen_xml_validator.py`, E3S2T1/E3S2T2) |
 | Experimentation | Jupyter notebooks | `explore_gherkin_ast.ipynb` |
 
 Dependency versions, including the OpenAI SDK and its transitive dependencies,
@@ -585,7 +621,12 @@ Task titles are based on `JIRA_KANBAN.md`; completed work is recorded below.
 
 - [x] **E1S4T1 - Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LlamaIndex**
 - [x] **E1S4T2 - Build a prototype RAG pipeline connecting the LLM to the Weaviate DB using LangChain**
-- [ ] **E1S4T3 - Document the findings and finalize framework selection**
+- [x] **E1S4T3 - Document the findings and finalize framework selection**
+
+The framework comparison concluded by selecting LangChain + LCEL for the core
+pipeline: `req_parser.py`, `gherkin_gen.py`, `ast_gen_A/C.py`, and the
+`llm_direct`/hybrid generators are all built on LangChain structured-output
+patterns; the LlamaIndex prototype remains in place for the RAG experiments.
 
 ### EPIC-2: Core Agent Pipeline
 
@@ -1153,8 +1194,14 @@ exercised — 4 baseline cases compile and simulate stably, and 2 negative cases
 float-literal error seen in E3S1T7. LLM Direct outputs are excluded per their
 comparison-draft role.
 
-Remaining E3S1 work: TIA Portal / PLCSIM documentation-only feasibility study
-(E3S1T9).
+- [ ] **E3S1T9 - TIA Portal / PLCSIM validation (skipped — platform constraint)**
+
+E3S1T9 is marked **skipped**: Siemens TIA Portal / PLCSIM is Windows-only,
+licensed commercial software that cannot run inside the Linux/WSL environment.
+The intended scope is documented as a theoretical feasibility study — how the
+generated artifacts (ST, LD IR, PLCopen XML) would map into TIA Portal and how
+PLCSIM could provide closed-loop simulation — without attempting a live run.
+EPIC-3 E3S1 is therefore complete apart from this skipped item.
 
 #### E3S2: PLCopen XML export
 
@@ -1210,8 +1257,34 @@ then runs Tier 2 only when clean, failing on low coverage score or any
 critical hazard. Offline tests use a deterministic fake evaluator for gating;
 no live API calls. Full suite now 131 tests.
 
-- [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
-- [ ] **E3S3T3 - Add negative / failure-path test cases** (planned).
+- [x] **E3S3T2 - Add unit tests for parsers and generators (complete)**
+
+E3S3T2 adds 9 unit-test files (236 tests) covering the deterministic and
+mockable surface of every E2S1-E2S4 parser/generator: req_parser path/arg/
+backend/WSL-IP logic; gherkin_gen content-word grounding, fabricated-given
+backstop and pure `.feature` renderer; ast_gen_B tokenization, Dice matching,
+boundary-safe name matching and pipeline `build_ast`; ast_gen_A fatal loading
+paths and backend-tagged output resolution; ast_gen_C tool-call
+extraction/parsing (dict/string args, OpenAI kwargs shape, failure counts),
+grounding checks and scripted-fake-LLM `build_ast` (+ ast_builders); st_gen
+variable sanitization/mapping, action classification, block construction and
+program render; ld_ir_gen term/negation matching, unsupported-condition
+detection, placeholder coils and multi-target interlock split networks;
+st_gen_llm_direct fence cleanup, structure validation and api-key guard;
+ld_ir_gen_llm_direct variable-name rules, structural ordering/uniqueness/
+traceability/multi-target checks and the validation-retry loop. LLM boundaries
+run offline via LangChain callable coercion and scripted fakes; fatal paths
+use tmp files. Full suite now 363 tests.
+
+- [ ] **E3S3T3 - Add negative / failure-path test cases** (deferred / skipped).
+
+E3S3T3 is marked **deferred / skipped**: the core deterministic negative gates
+are already embedded in the Tier 1 framework (`tests/test_validation_framework.py`
+— ungrounded devices, broken sequences, tampered interlocks, duplicate
+networks, unbalanced ST) and in the generator unit suites from E3S3T2 (fatal
+input paths, invalid tool arguments, grounding rejections, structural
+validation failures). Broader edge-case fuzzing with more complex industrial
+requirement texts remains future work.
 
 ## 👥 Contributors
 
@@ -1246,6 +1319,7 @@ no live API calls. Full suite now 131 tests.
 | E3S1T6 | Added `tests/test_hybrid_validation.py`, structural validation of hybrid generator outputs (TON / REAL / analogue / timer / colour) |
 | E3S1T7 | Added `src/matiec_checker.py` and `tests/test_matiec_compilation.py`, integrating the MATIEC `iec2c` compiler wrapper and ST compile checks |
 | E3S1T8 | Added `src/openplc_checker.py` and `tests/test_openplc_simulation.py`, integrating OpenPLC v3 runtime compilation, crash-free scan cycle simulation (timeout-wrapped), and state backup/restore |
+| E3S3T2 | Added 9 unit-test files (236 tests) for E2S1-E2S4 parsers and generators: req_parser, gherkin_gen, ast_gen_A/B/C (+ ast_builders), st_gen, ld_ir_gen and both llm_direct wrappers, covering deterministic helpers, offline fake-LLM boundaries (LangChain callable coercion, scripted tool calls, validation-retry loops), and fatal path contracts with tmp files; suite grew from 131 to 363 tests |
 
 ## 📜 Branch History
 
