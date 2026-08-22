@@ -1198,10 +1198,18 @@ step references into the parsed requirement), and the structural contract
 Both real pipelines pass; negative cases (ungrounded devices, broken
 sequences, tampered interlocks, duplicate networks, unbalanced ST) are
 strictly rejected via structured `Tier1Result`/`ValidationIssue` codes. Full
-suite now 121 tests. Tier 2 (LLM-based semantic intent evaluator) remains
-planned.
+suite now 121 tests.
 
-- [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
+- [x] **E3S3T1 (Part 2) - Tier 2 LLM-based semantic intent evaluator (complete)**
+`Tier2SemanticEvaluator` uses LangChain `with_structured_output` (Approach C
+pattern) so the LLM reviews generated ST/LD logic against the original
+requirement and emits structured verdicts — business-logic coverage scores,
+missing-step alerts, and safety-hazard flags — while Python keeps gate
+authority. `run_unified_validation` fails fast on Tier 1 structural errors,
+then runs Tier 2 only when clean, failing on low coverage score or any
+critical hazard. Offline tests use a deterministic fake evaluator for gating;
+no live API calls. Full suite now 131 tests.
+
 - [ ] **E3S3T2 - Add unit tests for parsers and generators** (planned).
 - [ ] **E3S3T3 - Add negative / failure-path test cases** (planned).
 
